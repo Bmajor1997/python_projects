@@ -52,7 +52,7 @@ no_file_selected_message = (
     "Please select a bank CSV file to continue."
 )
 # ============================================================
-# HELPER FUNCTIONS
+# MAIN TEST FUNCTIONS
 # ============================================================
 def display_welcome_screen():
 
@@ -100,11 +100,7 @@ def open_csv(csv_path):
     except Exception:
         print(csv_open_error)
 
-def count_transactions(csv_file):
-
-    transaction_count = len(csv_file)
-
-    return transaction_count
+    return csv_path
 
 def identify_date_column(csv_file):
 
@@ -162,6 +158,72 @@ def determine_date_range(csv_file,date_column_name ):
 
     return start_date, end_date
 
+def identify_amount_column(csv_file):
+
+    possible_amount_column_names = [
+        "amount",
+        "transaction amount",
+        "transaction_amount",
+        "value",
+        "transaction value",
+        "payment amount"
+    ]
+
+    no_amount_column_found_error = "Could not find Amount column"
+
+    normalized_csv_file = csv_file.columns.str.strip().lower()
+
+    possible_amount_columns = pd.Index(possible_amount_column_names)
+    matching_amount =  normalized_csv_file.intersection(possible_amount_columns)
+
+    if len(matching_amount) == 0:
+        raise ValueError(no_amount_column_found_error)
+
+    amount_column_name = matching_amount[0]
+
+    return amount_column_name
+
+
+def count_transactions(csv_file):
+
+    transaction_count = len(csv_file)
+
+    return transaction_count
+
+def calculate_financial_summary(csv_file):
+
+    transaction_count = count_transactions(csv_file)
+    amount_column_name = identify_amount_column(csv_file)
+
+    amount_values = csv_file[amount_column_name]
+
+    amount_values =  amount_values.astype(str)
+    amount_values = amount_values.str.replace("$", "", regex=False)
+    amount_values = amount_values.str.replace(",", "", regex=False)
+    amount_values = pd.to_numeric(
+        amount_values,
+        errors="coerce"
+    )
+    amount_values = amount_values.dropna()
+
+    total_income = amount_values[amount_values > 0].sum()
+
+    total_expense = amount_values[amount_values < 0].sum()
+
+    net_balance = total_income + total_expense
+
+    return transaction_count,total_income,total_expense,net_balance
+
+def display_financial_summary(
+        transaction_count,
+        start_date,
+        end_date,
+        total_income,
+        total_expenses,
+        net_balance
+):
+    pass
+
 def create_monthly_income_expenses_chart(
         months,
         income_totals,
@@ -191,13 +253,36 @@ def create_monthly_income_expenses_chart(
            label="Expenses",
            color="red"
            )
+
     ax.set_xticks(x_positions)
-    ax.set_xlabel(months)
+    ax.set_xticks(months)
+    ax.set_xlabel("Month")
 
     ax.set_ylabel("Amount ($)")
     ax.set_title("Monthly Financial Summary")
 
     ax.legend()
+
+    plt.show()
+
+    return fig
+
+def create_monthly_transaction_count_chart(months,transaction_counts):
+
+    fig, ax = plt.subplots()
+
+    x_positions = np.arange(len(months))
+
+    ax.bar(
+        x_positions,
+        transaction_counts,
+        color="white")
+
+    ax.set_xticks(x_positions)
+    ax.set_xlabel("Month")
+
+    ax.set_ylabel("Transactions")
+    ax.set_title("Monthly Transactions")
 
     plt.show()
 
@@ -240,28 +325,38 @@ def offer_to_save_chart(chart):
 
     return
 
-
-def create_monthly_transaction_count_chart():
-    pass
-
-def calculate_financial_summary(csv_file):
-    pass
-
-def display_financial_summary():
-    pass
-# ============================================================
-# MAIN TEST FUNCTIONS
-# ============================================================
 # Add for Version 2.0
-def create_expense_category_chart():
-    pass
-
+#def create_expense_category_chart():
+    #pass
 # ============================================================
 # MAIN
 # ============================================================
 def main():
+
     display_welcome_screen()
 
+    selected_file = select_csv_file()
+
+    if selected_file is None:
+        return
+
+    try:
+        csv_path = validate_csv_file(selected_file)
+        csv_file = open_csv(csv_path)
+
+        if csv_file is None:
+            return
+
+        transaction_count = count_transactions(csv_file)
+
+        date_column = identify_date_column(csv_file)
+        start_date, end_date = determine_date_range(csv_file, date_column)
+
+        chart = create_monthly_income_expenses_chart(csv_file, date_column)
+        offer_to_save_chart(chart)
+
+    except ValueError as error:
+        print(error)
 
 if __name__ == "__main__":
     main()
