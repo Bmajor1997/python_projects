@@ -1,0 +1,18 @@
+"""
+SETUP
+
+1. Install Python (if not already installed).
+2. Open the project in PyCharm.
+3. Create and activate a virtual environment (.venv).
+4. Create a requirements.txt file and install all required project dependencies.
+5. Export your bank transaction history as a CSV file.
+6. Save the exported CSV file to a location on your computer.
+7. Run the application.
+8. When prompted, select your bank CSV file using the file selection dialog.
+9. The application will validate the selected file and verify the required transaction data.
+10. After successful validation, the application will:
+      - Determine the reporting period.
+      - Calculate your financial summary.
+      - Generate monthly financial charts.
+11. Choose whether you would like to save the generated charts as image files.
+"""
