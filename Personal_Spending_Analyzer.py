@@ -1,5 +1,4 @@
-#Project Name: Personal Spending Analyzer
-
+# Project Name: Personal Spending Analyzer
 # ============================================================
 # IMPORTS
 # ============================================================
@@ -93,14 +92,17 @@ def validate_csv_file(selected_file):
     if csv_path.stat().st_size == 0:
         raise Exception(empty_file_error)
 
+    return csv_path
+
 def open_csv(csv_path):
 
     try:
         csv_file = pd.read_csv(csv_path)
     except Exception:
         print(csv_open_error)
+        return None
 
-    return csv_path
+    return csv_file
 
 def identify_date_column(csv_file):
 
@@ -171,7 +173,7 @@ def identify_amount_column(csv_file):
 
     no_amount_column_found_error = "Could not find Amount column"
 
-    normalized_csv_file = csv_file.columns.str.strip().lower()
+    normalized_csv_file = (csv_file.columns.str.strip().str.lower())
 
     possible_amount_columns = pd.Index(possible_amount_column_names)
     matching_amount =  normalized_csv_file.intersection(possible_amount_columns)
@@ -182,7 +184,6 @@ def identify_amount_column(csv_file):
     amount_column_name = matching_amount[0]
 
     return amount_column_name
-
 
 def count_transactions(csv_file):
 
@@ -212,17 +213,48 @@ def calculate_financial_summary(csv_file):
 
     net_balance = total_income + total_expense
 
-    return transaction_count,total_income,total_expense,net_balance
+    return transaction_count,total_income,total_expense,net_balance, amount_values
 
-def display_financial_summary(
-        transaction_count,
-        start_date,
-        end_date,
-        total_income,
-        total_expenses,
-        net_balance
-):
-    pass
+def calculate_monthly_summary(csv_file, date_column_name, amount_values):
+
+    monthly_data = pd.DataFrame({
+        "date": csv_file[date_column_name],
+        "amount": amount_values
+    })
+
+    monthly_data["date"] = pd.to_datetime(
+        monthly_data["date"],
+        errors="coerce"
+    )
+
+    monthly_data = monthly_data.dropna(
+        subset=["date", "amount"]
+    )
+
+    monthly_data["month"] = monthly_data["date"].dt.month_name()
+
+    monthly_income = monthly_data[
+        monthly_data["amount"] > 0
+        ]
+
+    monthly_expenses = monthly_data[
+        monthly_data["amount"] < 0
+        ]
+
+    monthly_income = monthly_income.groupby("month")["amount"].sum()
+    monthly_expenses = monthly_expenses.groupby("month")["amount"].sum()
+
+    monthly_transactions = monthly_data.groupby("month").size()
+
+    months = monthly_transactions.index.tolist()
+
+    income_totals = monthly_income.tolist()
+
+    expense_totals = monthly_expenses.tolist()
+
+    transaction_counts = monthly_transactions.tolist()
+
+    return months, income_totals, expense_totals, transaction_counts
 
 def create_monthly_income_expenses_chart(
         months,
@@ -255,9 +287,9 @@ def create_monthly_income_expenses_chart(
            )
 
     ax.set_xticks(x_positions)
-    ax.set_xticks(months)
-    ax.set_xlabel("Month")
+    ax.set_xticklabels(months)
 
+    ax.set_xlabel("Month")
     ax.set_ylabel("Amount ($)")
     ax.set_title("Monthly Financial Summary")
 
@@ -279,8 +311,9 @@ def create_monthly_transaction_count_chart(months,transaction_counts):
         color="white")
 
     ax.set_xticks(x_positions)
-    ax.set_xlabel("Month")
+    ax.set_xticklabels(months)
 
+    ax.set_xlabel("Month")
     ax.set_ylabel("Transactions")
     ax.set_title("Monthly Transactions")
 
@@ -288,11 +321,11 @@ def create_monthly_transaction_count_chart(months,transaction_counts):
 
     return fig
 
-def offer_to_save_chart(chart):
+def offer_to_save_charts(income_expense_chart,transaction_count_chart):
 
     chart_prompt = "Would you like to save this chart as an image? (Y/N): "
     invalid_save_choice_message = "The input is invalid."
-    chart_saved_successfully_message = "Chart has been saved successfully."
+    chart_saved_successfully_message = "Charts have been saved successfully."
     none_error = "Must Enter A Valid Input."
     file_name_prompt = "Please Enter The File Name: "
 
@@ -312,8 +345,22 @@ def offer_to_save_chart(chart):
                     continue
 
                 else:
-                    complete_file_name = file_name + ".png"
-                    chart.savefig(complete_file_name)
+                    income_expense_file_name = (
+                            file_name + "_income_expenses.png"
+                    )
+
+                    transaction_count_file_name = (
+                            file_name + "_transaction_count.png"
+                    )
+
+                    income_expense_chart.savefig(
+                        income_expense_file_name
+                    )
+
+                    transaction_count_chart.savefig(
+                        transaction_count_file_name
+                    )
+
                     print(chart_saved_successfully_message)
                     return
 
@@ -325,14 +372,26 @@ def offer_to_save_chart(chart):
 
     return
 
-# Add for Version 2.0
-#def create_expense_category_chart():
-    #pass
+def display_financial_summary(transaction_count,start_date,end_date,total_income,
+                              total_expenses,net_balance,months,income_totals,
+                              expense_totals,transaction_counts):
+
+    print("Financial Summary")
+    print(divider)
+    print(f"Reporting Period: {start_date} - {end_date}")
+    print(f"Transaction Count: {transaction_count}")
+    print(f"Total Income: ${total_income:,.2f}")
+    print(f"Total Expenses: ${total_expenses:,.2f}")
+    print(f"Net Balance: ${net_balance:,.2f}")
+    print(divider)
+
+    income_expense_chart = create_monthly_income_expenses_chart(months,income_totals,expense_totals)
+    transaction_count_chart = create_monthly_transaction_count_chart(months,transaction_counts)
+    offer_to_save_charts(income_expense_chart,transaction_count_chart)
 # ============================================================
 # MAIN
 # ============================================================
 def main():
-
     display_welcome_screen()
 
     selected_file = select_csv_file()
@@ -347,15 +406,51 @@ def main():
         if csv_file is None:
             return
 
-        transaction_count = count_transactions(csv_file)
-
         date_column = identify_date_column(csv_file)
-        start_date, end_date = determine_date_range(csv_file, date_column)
 
-        chart = create_monthly_income_expenses_chart(csv_file, date_column)
-        offer_to_save_chart(chart)
+        start_date, end_date = determine_date_range(
+            csv_file,
+            date_column
+        )
 
-    except ValueError as error:
+        (
+            transaction_count,
+            total_income,
+            total_expenses,
+            net_balance,
+            amount_values
+        ) = calculate_financial_summary(csv_file)
+
+        (
+            months,
+            income_totals,
+            expense_totals,
+            transaction_counts
+        ) = calculate_monthly_summary(
+            csv_file,
+            date_column,
+            amount_values
+        )
+
+        display_financial_summary(
+            transaction_count,
+            start_date,
+            end_date,
+            total_income,
+            total_expenses,
+            net_balance,
+            months,
+            income_totals,
+            expense_totals,
+            transaction_counts
+        )
+
+    except (
+            ValueError,
+            FileNotFoundError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError
+    ) as error:
         print(error)
 
 if __name__ == "__main__":
