@@ -1,0 +1,25 @@
+"""
+Project Name: Personal Finance Analyzer
+
+Description:
+This project is designed to strengthen my Python programming skills by
+building a personal finance application that analyzes bank-exported CSV
+files. The application allows users to select a transaction file, validates
+the data, identifies important financial information, calculates summaries,
+and generates visual reports of monthly income, expenses, and transaction
+activity. The project provides hands-on experience working with real-world
+financial data while developing skills in file handling, data validation,
+data analysis with Pandas, and data visualization with Matplotlib.
+
+Objectives:
+- Verify that a bank transaction CSV file can be selected and loaded successfully.
+- Verify that the selected file is a valid, non-empty CSV file.
+- Verify that required date and amount columns are identified correctly.
+- Verify that transaction dates are processed and the reporting period is determined accurately.
+- Verify that transaction amounts are cleaned and converted into numeric values.
+- Verify that total income, total expenses, net balance, and transaction count are calculated correctly.
+- Verify that monthly financial summaries are generated accurately.
+- Verify that monthly income, expense, and transaction charts are displayed correctly.
+- Verify that users can save generated charts as image files.
+- Verify that invalid, missing, or incomplete transaction data is handled safely with appropriate error messages.
+"""
