@@ -11,9 +11,9 @@ import numpy as np
 # ============================================================
 # APPLICATION INFORMATION
 # ============================================================
-application_name = "Personal Finance Analyzer"
-application_version = "Version 1.0"
+application_version = "Beta version 1.0"
 program_title = "Personal Finance Analyzer"
+application_name = "Financial Summary Report"
 # ============================================================
 # USER INTERFACE
 # ============================================================
@@ -273,7 +273,7 @@ def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
 
     income_totals = monthly_income.tolist()
 
-    expense_totals = monthly_expenses.tolist()
+    expense_totals = monthly_expenses.abs().tolist()
 
     transaction_counts = monthly_transactions.tolist()
 
@@ -287,7 +287,7 @@ def create_monthly_income_expenses_chart(
 ):
 
     # SET the width of each bar
-    bar_width = 0.30
+    bar_width = 0.15
 
     # CALCULATE the x-axis positions for each month
     x_positions = np.arange(len(months))
@@ -317,16 +317,16 @@ def create_monthly_income_expenses_chart(
 
     income_axis.legend()
 
-
-
 def create_monthly_transaction_count_chart(transaction_axis,months,transaction_counts):
     # CALCULATE the x-axis positions for each month
 
     x_positions = np.arange(len(months))
+    bar_width = 0.15
 
     transaction_axis.bar(
         x_positions,
         transaction_counts,
+        width=bar_width,
         color="blue"
     )
 
@@ -337,7 +337,13 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
     transaction_axis.set_ylabel("Transactions")
     transaction_axis.set_title("Monthly Transactions")
 
+def style_financial_table():
+    pass
+def determine_financial_health():
+    pass
+
 def create_financial_report(transaction_count,start_date,end_date,total_income,
+
     total_expenses,net_balance,months,income_totals,expense_totals,transaction_counts):
 
     # Create report
@@ -349,15 +355,18 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
 
     report_period = (f"Reporting Period: {formatted_start_date} - {formatted_end_date}")
 
-    report_figure.suptitle("Personal Finance Report")
-    report_figure.text(0.5, 0.93, report_period, ha = "center")
-
-    report_layout = report_figure.add_gridspec(2,2)
+    report_figure.suptitle(program_title, fontsize=23, fontweight="bold", color="Black")
+    report_figure.text(0.5, 0.91, application_name, ha = "center", fontsize=18, color="darkblue")
+    report_figure.text(0.5, 0.87, report_period, ha = "center", fontsize=15)
+    
+    report_layout = report_figure.add_gridspec(2,2, height_ratios=[0.7, 1.3])
     income_axis = report_figure.add_subplot(report_layout[1, 0])
     transaction_axis = report_figure.add_subplot(report_layout[1, 1])
     financial_summary = report_figure.add_subplot(report_layout[0, :])
     financial_summary.axis("off")
 
+    report_figure.text(0.5,0.83, "Financial Summary", ha="center", fontsize=16)
+   
     financial_summary_data = [
     ["Transactions", transaction_count],
     ["Total Income", f"${total_income:,.2f}"],
@@ -367,7 +376,7 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
 
     financial_table = financial_summary.table(
         cellText=financial_summary_data,
-        colLabels=["Financial Summary", "Amount"],
+        colLabels=["Category", "Amount"],
         loc="center"
     )
     financial_table.scale(1.0,2.0
