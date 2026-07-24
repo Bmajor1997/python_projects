@@ -20,35 +20,31 @@ program_title = "Personal Finance Analyzer"
 divider = "=" * 60
 welcome_message = (
     "Welcome!\n\n"
-    "This application analyzes bank-exported CSV files and\n"
+    "This application analyzes bank-exported Excel files and\n"
     "provides financial summaries and visualizations."
 )
-# ============================================================
-# PROMPT MESSAGES
-# ============================================================
-csv_path_prompt = "Enter the path to your bank CSV: "
 # ============================================================
 # ERROR MESSAGES
 # ============================================================
 file_not_found_error = "The selected file could not be found."
 no_file_selected_error = "No file path was provided."
-invalid_file_type_error = "The selected file is not a CSV file."
-empty_file_error = "The selected CSV file is empty."
-missing_columns_error = "The CSV file is missing one or more required columns."
-invalid_bank_file_error = "The selected file is not a valid bank transaction CSV."
+invalid_file_type_error = "The selected file is not a XLSX file."
+empty_file_error = "The selected XLSX file is empty."
+missing_columns_error = "The XLSX file is missing one or more required columns."
+invalid_bank_file_error = "The selected file is not a valid bank transaction."
 invalid_transaction_data_error = (
     "The transaction data contains invalid values. "
-    "Please correct the CSV and try again."
+    "Please correct the XLSX and try again."
 )
-csv_open_error = "File could not be opened."
+xlsx_open_error = "File could not be opened."
 # ============================================================
 # FILE DIALOG CONSTANTS
 # ============================================================
-file_dialog_title = "Select Your Bank CSV File"
-csv_file_types = [("CSV Files", "*.csv")]
+file_dialog_title = "Select Your Bank XLSX File"
+xlsx_file_types = [("XLSX Files", "*.xlsx")]
 no_file_selected_message = (
     "No file was selected.\n\n"
-    "Please select a bank CSV file to continue."
+    "Please select a bank XLSX file to continue."
 )
 # ============================================================
 # MAIN TEST FUNCTIONS
@@ -62,14 +58,14 @@ def display_welcome_screen():
     print(welcome_message)
     print(divider)
 
-def select_csv_file():
+def select_xlsx_file():
 
     root = tk.Tk()
     root.withdraw()
 
     selected_file = filedialog.askopenfilename(
         title=file_dialog_title,
-        filetypes=csv_file_types
+        filetypes=xlsx_file_types
     )
 
     root.destroy()
@@ -79,33 +75,32 @@ def select_csv_file():
 
     return selected_file
 
-def validate_csv_file(selected_file):
+def validate_xlsx_file(selected_file):
 
-    csv_path = Path(selected_file)
+    xlsx_path = Path(selected_file)
 
-    if not csv_path.exists():
+    if not xlsx_path.exists():
         raise Exception(no_file_selected_error)
 
-    if csv_path.suffix != ".csv":
+    if xlsx_path.suffix != ".xlsx":
         raise Exception(invalid_file_type_error)
 
-    if csv_path.stat().st_size == 0:
+    if xlsx_path.stat().st_size == 0:
         raise Exception(empty_file_error)
 
-    return csv_path
+    return xlsx_path
 
-def open_csv(csv_path):
+def open_xlsx(xlsx_path):
 
     try:
-        csv_file = pd.read_csv(csv_path)
+        xlsx_file = pd.read_excel(xlsx_path)
     except Exception:
-        print(csv_open_error)
+        print(xlsx_open_error)
         return None
 
-    return csv_file
+    return xlsx_file
 
-def identify_date_column(csv_file):
-
+def identify_date_column(xlsx_file):
     possible_date_column_names = [
         "date",
         "transaction date",
@@ -121,11 +116,19 @@ def identify_date_column(csv_file):
         "processed date",
         "processing date"
     ]
-    no_date_column_found_error =" No Date Column Found."
-    normalized_columns = csv_file.columns.str.strip().str.lower()
 
+    no_date_column_found_error = "No Date Column Found."
 
-    possible_date_columns = pd.Index(possible_date_column_names)
+    normalized_columns = (
+        xlsx_file.columns
+        .str.strip()
+        .str.lower()
+    )
+
+    possible_date_columns = pd.Index(
+        possible_date_column_names
+    )
+
     matching_columns = normalized_columns.intersection(
         possible_date_columns
     )
@@ -133,17 +136,23 @@ def identify_date_column(csv_file):
     if len(matching_columns) == 0:
         raise ValueError(no_date_column_found_error)
 
-    date_column_name = matching_columns[0]
+    matching_column_name = matching_columns[0]
 
-    return  date_column_name
+    column_position = normalized_columns.get_loc(
+        matching_column_name
+    )
 
-def determine_date_range(csv_file,date_column_name ):
+    date_column_name = xlsx_file.columns[column_position]
+
+    return date_column_name
+
+def determine_date_range(xlsx_file,date_column_name ):
 
     # Create error message
     no_dates_found_error = "No Dates Were Found."
 
     # Retrieve the transaction date column
-    date_values = csv_file[date_column_name]
+    date_values = xlsx_file[date_column_name]
 
     # Convert all values to datetime
     date_values = pd.to_datetime(date_values, errors="coerce")
@@ -160,8 +169,7 @@ def determine_date_range(csv_file,date_column_name ):
 
     return start_date, end_date
 
-def identify_amount_column(csv_file):
-
+def identify_amount_column(xlsx_file):
     possible_amount_column_names = [
         "amount",
         "transaction amount",
@@ -173,30 +181,45 @@ def identify_amount_column(csv_file):
 
     no_amount_column_found_error = "Could not find Amount column"
 
-    normalized_csv_file = (csv_file.columns.str.strip().str.lower())
+    normalized_columns = (
+        xlsx_file.columns
+        .str.strip()
+        .str.lower()
+    )
 
-    possible_amount_columns = pd.Index(possible_amount_column_names)
-    matching_amount =  normalized_csv_file.intersection(possible_amount_columns)
+    possible_amount_columns = pd.Index(
+        possible_amount_column_names
+    )
+
+    matching_amount = normalized_columns.intersection(
+        possible_amount_columns
+    )
 
     if len(matching_amount) == 0:
         raise ValueError(no_amount_column_found_error)
 
-    amount_column_name = matching_amount[0]
+    matching_column_name = matching_amount[0]
+
+    column_position = normalized_columns.get_loc(
+        matching_column_name
+    )
+
+    amount_column_name = xlsx_file.columns[column_position]
 
     return amount_column_name
 
-def count_transactions(csv_file):
+def count_transactions(xlsx_file):
 
-    transaction_count = len(csv_file)
+    transaction_count = len(xlsx_file)
 
     return transaction_count
 
-def calculate_financial_summary(csv_file):
+def calculate_financial_summary(xlsx_file):
 
-    transaction_count = count_transactions(csv_file)
-    amount_column_name = identify_amount_column(csv_file)
+    transaction_count = count_transactions(xlsx_file)
+    amount_column_name = identify_amount_column(xlsx_file)
 
-    amount_values = csv_file[amount_column_name]
+    amount_values = xlsx_file[amount_column_name]
 
     amount_values =  amount_values.astype(str)
     amount_values = amount_values.str.replace("$", "", regex=False)
@@ -215,10 +238,10 @@ def calculate_financial_summary(csv_file):
 
     return transaction_count,total_income,total_expense,net_balance, amount_values
 
-def calculate_monthly_summary(csv_file, date_column_name, amount_values):
+def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
 
     monthly_data = pd.DataFrame({
-        "date": csv_file[date_column_name],
+        "date": xlsx_file[date_column_name],
         "amount": amount_values
     })
 
@@ -257,21 +280,19 @@ def calculate_monthly_summary(csv_file, date_column_name, amount_values):
     return months, income_totals, expense_totals, transaction_counts
 
 def create_monthly_income_expenses_chart(
+        income_axis,
         months,
         income_totals,
         expense_totals
 ):
 
-    # CREATE a new figure and axes
-    fig, ax = plt.subplots()
-
     # SET the width of each bar
-    bar_width = .30
+    bar_width = 0.30
 
     # CALCULATE the x-axis positions for each month
     x_positions = np.arange(len(months))
 
-    ax.bar(
+    income_axis.bar(
         x_positions - (bar_width / 2),
         income_totals,
         width=bar_width,
@@ -279,49 +300,102 @@ def create_monthly_income_expenses_chart(
         color="green"
     )
 
-    ax.bar(x_positions + (bar_width/2),
-           expense_totals,
-           width=bar_width,
-           label="Expenses",
-           color="red"
-           )
+    income_axis.bar(
+        x_positions + (bar_width / 2),
+        expense_totals,
+        width=bar_width,
+        label="Expenses",
+        color="red"
+    )
 
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(months)
+    income_axis.set_xticks(x_positions)
+    income_axis.set_xticklabels(months)
 
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Amount ($)")
-    ax.set_title("Monthly Financial Summary")
+    income_axis.set_xlabel("Month")
+    income_axis.set_ylabel("Amount ($)")
+    income_axis.set_title("Monthly Financial Summary")
 
-    ax.legend()
+    income_axis.legend()
 
-    plt.show()
 
-    return fig
 
-def create_monthly_transaction_count_chart(months,transaction_counts):
-
-    fig, ax = plt.subplots()
+def create_monthly_transaction_count_chart(transaction_axis,months,transaction_counts):
+    # CALCULATE the x-axis positions for each month
 
     x_positions = np.arange(len(months))
 
-    ax.bar(
+    transaction_axis.bar(
         x_positions,
         transaction_counts,
-        color="white")
+        color="blue"
+    )
 
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(months)
+    transaction_axis.set_xticks(x_positions)
+    transaction_axis.set_xticklabels(months)
 
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Transactions")
-    ax.set_title("Monthly Transactions")
+    transaction_axis.set_xlabel("Month")
+    transaction_axis.set_ylabel("Transactions")
+    transaction_axis.set_title("Monthly Transactions")
+
+def create_financial_report(transaction_count,start_date,end_date,total_income,
+    total_expenses,net_balance,months,income_totals,expense_totals,transaction_counts):
+
+    # Create report
+
+    report_figure = plt.figure(figsize=(14, 8))
+
+    formatted_start_date = start_date.strftime("%B %d, %Y")
+    formatted_end_date = end_date.strftime("%B %d, %Y")
+
+    report_period = (f"Reporting Period: {formatted_start_date} - {formatted_end_date}")
+
+    report_figure.suptitle("Personal Finance Report")
+    report_figure.text(0.5, 0.93, report_period, ha = "center")
+
+    report_layout = report_figure.add_gridspec(2,2)
+    income_axis = report_figure.add_subplot(report_layout[1, 0])
+    transaction_axis = report_figure.add_subplot(report_layout[1, 1])
+    financial_summary = report_figure.add_subplot(report_layout[0, :])
+    financial_summary.axis("off")
+
+    financial_summary_data = [
+    ["Transactions", transaction_count],
+    ["Total Income", f"${total_income:,.2f}"],
+    ["Total Expenses", f"${total_expenses:,.2f}"],
+    ["Net Balance", f"${net_balance:,.2f}"]
+]
+
+    financial_table = financial_summary.table(
+        cellText=financial_summary_data,
+        colLabels=["Financial Summary", "Amount"],
+        loc="center"
+    )
+    financial_table.scale(1.0,2.0
+                          )
+    create_monthly_income_expenses_chart(
+        income_axis,
+        months,
+        income_totals,
+        expense_totals
+    )
+
+    create_monthly_transaction_count_chart(
+        transaction_axis,
+        months,
+        transaction_counts
+    )
+
+    report_figure.subplots_adjust(
+        top=0.84,
+        hspace=0.40,
+        wspace=0.30
+    )
 
     plt.show()
 
-    return fig
+    return report_figure
 
-def offer_to_save_charts(income_expense_chart,transaction_count_chart):
+def save_financial_report(income_expense_chart,transaction_count_chart):
 
     chart_prompt = "Would you like to save this chart as an image? (Y/N): "
     invalid_save_choice_message = "The input is invalid."
@@ -372,45 +446,32 @@ def offer_to_save_charts(income_expense_chart,transaction_count_chart):
 
     return
 
-def display_financial_summary(transaction_count,start_date,end_date,total_income,
-                              total_expenses,net_balance,months,income_totals,
-                              expense_totals,transaction_counts):
-
-    print("Financial Summary")
-    print(divider)
-    print(f"Reporting Period: {start_date} - {end_date}")
-    print(f"Transaction Count: {transaction_count}")
-    print(f"Total Income: ${total_income:,.2f}")
-    print(f"Total Expenses: ${total_expenses:,.2f}")
-    print(f"Net Balance: ${net_balance:,.2f}")
-    print(divider)
-
-    income_expense_chart = create_monthly_income_expenses_chart(months,income_totals,expense_totals)
-    transaction_count_chart = create_monthly_transaction_count_chart(months,transaction_counts)
-    offer_to_save_charts(income_expense_chart,transaction_count_chart)
 # ============================================================
 # MAIN
 # ============================================================
 def main():
+
     display_welcome_screen()
 
-    selected_file = select_csv_file()
+    selected_file = select_xlsx_file()
 
     if selected_file is None:
+        print(no_file_selected_error)
         return
 
     try:
-        csv_path = validate_csv_file(selected_file)
-        csv_file = open_csv(csv_path)
+        xlsx_path = validate_xlsx_file(selected_file)
 
-        if csv_file is None:
+        xlsx_file = open_xlsx(xlsx_path)
+
+        if xlsx_file is None:
             return
 
-        date_column = identify_date_column(csv_file)
+        date_column_name = identify_date_column(xlsx_file)
 
         start_date, end_date = determine_date_range(
-            csv_file,
-            date_column
+            xlsx_file,
+            date_column_name
         )
 
         (
@@ -419,7 +480,7 @@ def main():
             total_expenses,
             net_balance,
             amount_values
-        ) = calculate_financial_summary(csv_file)
+        ) = calculate_financial_summary(xlsx_file)
 
         (
             months,
@@ -427,12 +488,12 @@ def main():
             expense_totals,
             transaction_counts
         ) = calculate_monthly_summary(
-            csv_file,
-            date_column,
+            xlsx_file,
+            date_column_name,
             amount_values
         )
 
-        display_financial_summary(
+        report_figure = create_financial_report(
             transaction_count,
             start_date,
             end_date,
@@ -445,12 +506,9 @@ def main():
             transaction_counts
         )
 
-    except (
-            ValueError,
-            FileNotFoundError,
-            pd.errors.EmptyDataError,
-            pd.errors.ParserError
-    ) as error:
+        save_financial_report(report_figure,)
+
+    except Exception as error:
         print(error)
 
 if __name__ == "__main__":
