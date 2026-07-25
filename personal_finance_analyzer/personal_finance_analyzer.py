@@ -24,7 +24,7 @@ welcome_message = (
     "provides financial summaries and visualizations."
 )
 # ============================================================
-# ERROR MESSAGES
+# ERROR MESSAGE
 # ============================================================
 file_not_found_error = "The selected file could not be found."
 no_file_selected_error = "No file path was provided."
@@ -38,7 +38,7 @@ invalid_transaction_data_error = (
 )
 xlsx_open_error = "File could not be opened."
 # ============================================================
-# FILE DIALOG CONSTANTS
+# FILE DIALOG CONSTANT
 # ============================================================
 file_dialog_title = "Select Your Bank XLSX File"
 xlsx_file_types = [("XLSX Files", "*.xlsx")]
@@ -47,7 +47,7 @@ no_file_selected_message = (
     "Please select a bank XLSX file to continue."
 )
 # ============================================================
-# MAIN TEST FUNCTIONS
+# MAIN TEST FUNCTION
 # ============================================================
 def display_welcome_screen():
 
