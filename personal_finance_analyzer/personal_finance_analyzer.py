@@ -9,13 +9,13 @@ from tkinter import filedialog
 import tkinter as tk
 import numpy as np
 # ============================================================
-# APPLICATION INFORMATION
+# APPLICATION INFORMATIONS
 # ============================================================
 application_version = "Beta version 1.0"
 program_title = "Personal Finance Analyzer"
 application_name = "Financial Summary Report"
 # ============================================================
-# USER INTERFACE
+# USER INTERFACES
 # ============================================================
 divider = "=" * 60
 welcome_message = (
@@ -24,7 +24,7 @@ welcome_message = (
     "provides financial summaries and visualizations."
 )
 # ============================================================
-# ERROR MESSAGE
+# ERROR MESSAGES
 # ============================================================
 file_not_found_error = "The selected file could not be found."
 no_file_selected_error = "No file path was provided."
@@ -38,7 +38,7 @@ invalid_transaction_data_error = (
 )
 xlsx_open_error = "File could not be opened."
 # ============================================================
-# FILE DIALOG CONSTANT
+# FILE DIALOG CONSTANTS
 # ============================================================
 file_dialog_title = "Select Your Bank XLSX File"
 xlsx_file_types = [("XLSX Files", "*.xlsx")]
@@ -47,7 +47,7 @@ no_file_selected_message = (
     "Please select a bank XLSX file to continue."
 )
 # ============================================================
-# MAIN TEST FUNCTION
+# MAIN TEST FUNCTIONS
 # ============================================================
 def display_welcome_screen():
 
