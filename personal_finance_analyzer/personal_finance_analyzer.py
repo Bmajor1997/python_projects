@@ -12,8 +12,7 @@ import numpy as np
 # APPLICATION INFORMATIONS
 # ============================================================
 application_version = "Beta version 1.0"
-program_title = "Personal Finance Analyzer"
-application_name = "Financial Summary Report"
+program_title = "Financial Insights Report"
 # ============================================================
 # USER INTERFACES
 # ============================================================
@@ -388,8 +387,8 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
     report_period = (f"Reporting Period: {formatted_start_date} - {formatted_end_date}")
 
     report_figure.suptitle(program_title, fontsize=23, fontweight="bold", color="Black")
-    report_figure.text(0.5, 0.91, application_name, ha = "center", fontsize=18, color="darkblue")
-    report_figure.text(0.5, 0.87, report_period, ha = "center", fontsize=15)
+    
+    report_figure.text(0.5, 0.9, report_period, ha = "center", fontsize=15)
     
     report_layout = report_figure.add_gridspec(3,2, height_ratios=[0.2, 0.8, 1.6])
     banner_axis = report_figure.add_subplot(report_layout[0, :])
