@@ -57,7 +57,6 @@ def display_welcome_screen():
     print(divider)
     print(welcome_message)
     print(divider)
-
 def select_xlsx_file():
 
     root = tk.Tk()
@@ -74,7 +73,6 @@ def select_xlsx_file():
         return None
 
     return selected_file
-
 def validate_xlsx_file(selected_file):
 
     xlsx_path = Path(selected_file)
@@ -89,7 +87,6 @@ def validate_xlsx_file(selected_file):
         raise Exception(empty_file_error)
 
     return xlsx_path
-
 def open_xlsx(xlsx_path):
 
     try:
@@ -99,7 +96,6 @@ def open_xlsx(xlsx_path):
         return None
 
     return xlsx_file
-
 def identify_date_column(xlsx_file):
     possible_date_column_names = [
         "date",
@@ -145,7 +141,6 @@ def identify_date_column(xlsx_file):
     date_column_name = xlsx_file.columns[column_position]
 
     return date_column_name
-
 def determine_date_range(xlsx_file,date_column_name ):
 
     # Create error message
@@ -168,7 +163,6 @@ def determine_date_range(xlsx_file,date_column_name ):
     end_date = date_values.max()
 
     return start_date, end_date
-
 def identify_amount_column(xlsx_file):
     possible_amount_column_names = [
         "amount",
@@ -213,7 +207,6 @@ def count_transactions(xlsx_file):
     transaction_count = len(xlsx_file)
 
     return transaction_count
-
 def calculate_financial_summary(xlsx_file):
 
     transaction_count = count_transactions(xlsx_file)
@@ -237,7 +230,6 @@ def calculate_financial_summary(xlsx_file):
     net_balance = total_income + total_expense
 
     return transaction_count,total_income,total_expense,net_balance, amount_values
-
 def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
 
     monthly_data = pd.DataFrame({
@@ -278,6 +270,52 @@ def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
     transaction_counts = monthly_transactions.tolist()
 
     return months, income_totals, expense_totals, transaction_counts
+def determine_financial_health():
+    pass
+def style_financial_table(financial_table):
+
+   fin_tab = financial_table.get_celld()
+
+   for (row, column), cell in fin_tab.items():
+
+        if row == 0:
+            header_cell = cell
+            header_cell.set_facecolor("darkblue")
+            header_cell.set_text_props(
+                color="white",
+                weight="bold",
+                fontsize=12,
+                ha="center",
+                va="center"
+            )
+            header_cell.set_edgecolor("white")
+            header_cell.set_linewidth(1.0)
+
+        else:
+            data_cell = cell
+
+            if row % 2 == 0:
+                data_cell.set_facecolor("whitesmoke")
+            else:
+                data_cell.set_facecolor("white")
+
+            data_cell.set_text_props(
+                fontsize=10,
+                ha="center",
+                va="center"
+            )
+            data_cell.set_edgecolor("lightgray")
+            data_cell.set_linewidth(0.8)
+
+   financial_table.scale(1.0, 2.0)
+
+   return None
+
+def style_monthly_financial_summary():
+    pass
+
+def style_monthly_transaction_count_summary():
+    pass
 
 def create_monthly_income_expenses_chart(
         income_axis,
@@ -316,7 +354,6 @@ def create_monthly_income_expenses_chart(
     income_axis.set_title("Monthly Financial Summary")
 
     income_axis.legend()
-
 def create_monthly_transaction_count_chart(transaction_axis,months,transaction_counts):
     # CALCULATE the x-axis positions for each month
 
@@ -337,11 +374,6 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
     transaction_axis.set_ylabel("Transactions")
     transaction_axis.set_title("Monthly Transactions")
 
-def style_financial_table():
-    pass
-def determine_financial_health():
-    pass
-
 def create_financial_report(transaction_count,start_date,end_date,total_income,
 
     total_expenses,net_balance,months,income_totals,expense_totals,transaction_counts):
@@ -359,14 +391,26 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
     report_figure.text(0.5, 0.91, application_name, ha = "center", fontsize=18, color="darkblue")
     report_figure.text(0.5, 0.87, report_period, ha = "center", fontsize=15)
     
-    report_layout = report_figure.add_gridspec(2,2, height_ratios=[0.7, 1.3])
-    income_axis = report_figure.add_subplot(report_layout[1, 0])
-    transaction_axis = report_figure.add_subplot(report_layout[1, 1])
-    financial_summary = report_figure.add_subplot(report_layout[0, :])
+    report_layout = report_figure.add_gridspec(3,2, height_ratios=[0.2, 0.8, 1.6])
+    banner_axis = report_figure.add_subplot(report_layout[0, :])
+    financial_summary = report_figure.add_subplot(report_layout[1, :])
+    income_axis = report_figure.add_subplot(report_layout[2, 0])
+    transaction_axis = report_figure.add_subplot(report_layout[2, 1])
     financial_summary.axis("off")
-
-    report_figure.text(0.5,0.83, "Financial Summary", ha="center", fontsize=16)
-   
+    banner_axis.set_facecolor("darkblue")
+    banner_axis.set_xticks([])
+    banner_axis.set_yticks([])
+    banner_axis.text(
+        0.5,
+        0.5,
+        "Financial Summary",
+        ha="center",
+        va="center",
+        fontsize=14,
+        fontweight="bold",
+        color="white"
+)
+    
     financial_summary_data = [
     ["Transactions", transaction_count],
     ["Total Income", f"${total_income:,.2f}"],
@@ -375,12 +419,12 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
 ]
 
     financial_table = financial_summary.table(
-        cellText=financial_summary_data,
-        colLabels=["Category", "Amount"],
-        loc="center"
-    )
-    financial_table.scale(1.0,2.0
-                          )
+    cellText=financial_summary_data,
+    colLabels=["Category", "Amount"],
+    loc="center"
+)
+
+    style_financial_table(financial_table)
     create_monthly_income_expenses_chart(
         income_axis,
         months,
@@ -396,7 +440,7 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
 
     report_figure.subplots_adjust(
         top=0.84,
-        hspace=0.40,
+        hspace=0.2,
         wspace=0.30
     )
 
@@ -454,7 +498,6 @@ def save_financial_report(income_expense_chart,transaction_count_chart):
             print(invalid_save_choice_message)
 
     return
-
 # ============================================================
 # MAIN
 # ============================================================
