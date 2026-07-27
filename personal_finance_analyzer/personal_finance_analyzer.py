@@ -4,6 +4,7 @@
 # ============================================================
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch
 from pathlib import Path
 from tkinter import filedialog
 import tkinter as tk
@@ -310,12 +311,6 @@ def style_financial_table(financial_table):
 
    return None
 
-def style_monthly_financial_summary():
-    pass
-
-def style_monthly_transaction_count_summary():
-    pass
-
 def create_monthly_income_expenses_chart(
         income_axis,
         months,
@@ -326,19 +321,25 @@ def create_monthly_income_expenses_chart(
     # SET the width of each bar
     bar_width = 0.15
 
+    # SET the positions of the bars on the x-axis
+    bar_gap = 0.05  
+    
     # CALCULATE the x-axis positions for each month
     x_positions = np.arange(len(months))
 
-    income_axis.bar(
-        x_positions - (bar_width / 2),
+    income_positions = x_positions - ((bar_width + bar_gap) / 2)
+    expense_positions = x_positions + ((bar_width + bar_gap) / 2)
+
+    income_bars = income_axis.bar(
+        income_positions,
         income_totals,
         width=bar_width,
         label="Income",
-        color="green"
+        color="limegreen"
     )
 
-    income_axis.bar(
-        x_positions + (bar_width / 2),
+    expense_bars = income_axis.bar(
+        expense_positions,
         expense_totals,
         width=bar_width,
         label="Expenses",
@@ -350,9 +351,70 @@ def create_monthly_income_expenses_chart(
 
     income_axis.set_xlabel("Month")
     income_axis.set_ylabel("Amount ($)")
-    income_axis.set_title("Monthly Financial Summary")
+    income_axis.set_title("MONTHLY INCOME vs EXPENSES",fontsize=15, fontweight="bold", color="black")
 
-    income_axis.legend()
+    income_axis.legend(loc = "lower center",bbox_to_anchor=(0.5, -0.3),
+    ncol=2,fontsize=11,frameon=False)
+    
+    return income_bars, expense_bars
+
+def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
+
+    current_ylim, current_ymax = income_axis.get_ylim()
+    label_offset_percentage = 0.02
+    y_axis_expansion_percentage = 0.08
+    expansion_amount = current_ymax * y_axis_expansion_percentage
+    new_ymax = current_ymax + expansion_amount
+
+    label_offset = current_ymax * label_offset_percentage
+
+    for income_bar in income_bars:
+        bar_height = income_bar.get_height()
+        bar_center = (income_bar.get_x() + income_bar.get_width() / 2)
+        formatted_value = f"${bar_height:,.2f}"
+        income_axis.text(
+            bar_center,
+            bar_height + label_offset,
+            formatted_value,
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color="black"
+        )
+        
+    for expense_bar in expense_bars:
+        bar_height = expense_bar.get_height()
+        bar_center = (expense_bar.get_x() + expense_bar.get_width() / 2)
+        formatted_value = f"${bar_height:,.2f}"
+        income_axis.text(
+            bar_center,
+            bar_height + label_offset,
+            formatted_value,
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color="black"
+        )
+    
+    income_axis.set_ylim(current_ylim, new_ymax)
+
+    card = FancyBboxPatch(
+        (-0.15, -0.32),
+        1.25,
+        1.39,
+        transform=income_axis.transAxes,
+        boxstyle="round,pad=0.02,rounding_size=0.03",
+        facecolor="white",
+        edgecolor="lightgrey",
+        linewidth=1.5,
+        clip_on=False,
+        zorder=-1
+)
+
+    income_axis.add_patch(card)
+
+    
+    
 def create_monthly_transaction_count_chart(transaction_axis,months,transaction_counts):
     # CALCULATE the x-axis positions for each month
 
@@ -373,9 +435,21 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
     transaction_axis.set_ylabel("Transactions")
     transaction_axis.set_title("Monthly Transactions")
 
-def create_financial_report(transaction_count,start_date,end_date,total_income,
+def style_monthly_transaction_count_summary():
+    pass
 
-    total_expenses,net_balance,months,income_totals,expense_totals,transaction_counts):
+def create_financial_report(
+    transaction_count,
+    start_date,
+    end_date,
+    total_income,
+    total_expenses,
+    net_balance,
+    months,
+    income_totals,
+    expense_totals,
+    transaction_counts
+):
 
     # Create report
 
@@ -424,12 +498,19 @@ def create_financial_report(transaction_count,start_date,end_date,total_income,
 )
 
     style_financial_table(financial_table)
-    create_monthly_income_expenses_chart(
+   
+    income_bars, expense_bars = create_monthly_income_expenses_chart(
+    income_axis,
+    months,
+    income_totals,
+    expense_totals
+)
+
+    style_monthly_income_expenses_chart(
         income_axis,
-        months,
-        income_totals,
-        expense_totals
-    )
+        income_bars,
+        expense_bars
+)
 
     create_monthly_transaction_count_chart(
         transaction_axis,
