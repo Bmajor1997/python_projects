@@ -46,6 +46,17 @@ no_file_selected_message = (
     "No file was selected.\n\n"
     "Please select a bank XLSX file to continue."
 )
+#=============================================================
+# GLOBAL CONSTANTS
+#=============================================================
+very_healthy_status = "Very Healthy"
+healthy_status = "Healthy"
+needs_attention_status = "Needs Attention"
+caution_status = "Caution"
+weak_status = "Weak"
+at_risk_status = "At Risk"
+very_weak_status = "Very Weak"
+unable_to_determine_status = "Unable to Determine"
 # ============================================================
 # MAIN TEST FUNCTIONS
 # ============================================================
@@ -201,7 +212,6 @@ def identify_amount_column(xlsx_file):
     amount_column_name = xlsx_file.columns[column_position]
 
     return amount_column_name
-
 def count_transactions(xlsx_file):
 
     transaction_count = len(xlsx_file)
@@ -270,8 +280,90 @@ def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
     transaction_counts = monthly_transactions.tolist()
 
     return months, income_totals, expense_totals, transaction_counts
-def determine_financial_health():
-    pass
+def determine_financial_health(total_income, total_expenses):
+
+    # SET the savings-rate thresholds
+    very_healthy_threshold = 20
+    healthy_threshold = 10
+    needs_attention_threshold = 5
+    caution_threshold = 0
+    weak_threshold = -10
+    at_risk_threshold = -25
+    
+
+    # SET the invalid-income error message
+    invalid_total_income_error = "Total income cannot be less than zero."
+
+    if total_income < 0:
+        raise ValueError(invalid_total_income_error)
+
+    normalized_expenses = abs(total_expenses)
+
+    if total_income == 0:
+
+        savings_rate = None
+
+        if normalized_expenses == 0:
+            financial_health = unable_to_determine_status
+
+        else:
+            financial_health = very_weak_status
+
+        return financial_health, savings_rate
+
+    calculated_net_balance = total_income - normalized_expenses
+
+    savings_rate = (
+        calculated_net_balance / total_income
+    ) * 100
+
+    if savings_rate >= very_healthy_threshold:
+        financial_health = very_healthy_status
+
+    elif savings_rate >= healthy_threshold:
+        financial_health = healthy_status
+
+    elif savings_rate >= needs_attention_threshold:
+        financial_health = needs_attention_status
+
+    elif savings_rate >= caution_threshold:
+        financial_health = caution_status
+
+    elif savings_rate >= weak_threshold:
+        financial_health = weak_status
+
+    elif savings_rate >= at_risk_threshold:
+        financial_health = at_risk_status
+
+    else:
+        financial_health = very_weak_status
+
+    return financial_health, savings_rate
+def get_financial_health_colors(financial_health):
+
+    health_color_map = {
+        very_healthy_status: ("#006400", "#E8F5E9"),
+        healthy_status: ("#228B22", "#EEF8EE"),
+        needs_attention_status: ("#6B8E23", "#F4F8E8"),
+        caution_status: ("#B8860B", "#FFF8DC"),
+        weak_status: ("#FFB000", "#FFF4CC"),
+        at_risk_status: ("#FF4500", "#FFF0EB"),
+        very_weak_status: ("#8B0000", "#FDECEC"),
+        unable_to_determine_status: ("#666666", "#F2F2F2")
+}
+    default_colors = ("#666666", "#F2F2F2")
+
+    selected_colors = health_color_map.get(
+        financial_health,
+        default_colors
+    )
+    (
+        status_forground_color,
+        status_background_color
+    ) = selected_colors
+
+    return status_forground_color, status_background_color
+   
 def style_financial_table(financial_table):
 
    fin_tab = financial_table.get_celld()
@@ -311,6 +403,35 @@ def style_financial_table(financial_table):
 
    return None
 
+def create_financial_health_summary(financial_health_axis,financial_health,savings_rate,formatted_savings_rate,):
+    
+    financial_health_title = "Financial Health"
+    status_label = "Status:"
+    savings_rate_label = "Savings Rate:"
+    unavailable_rate_text = "N/A"
+
+    card_x_position = 0.01
+    card_y_position = 0.1
+    card_width = .98
+    card_height = .8
+
+    common_vertical_position = .5
+    title_horizontal_position = .16
+    status_label_horizontal_position = .41
+    savings_label_horizontal_position = .74
+    savings_result_horizontal_position = .75
+
+    title_font_size = 13
+    label_font_size = 11
+    result_font_size = 11
+
+    card_border_width = 1.5
+    corner_rounding_size = .03
+
+    financial_health_axis.set_visable(False)
+
+    
+
 def create_monthly_income_expenses_chart(
         income_axis,
         months,
@@ -322,7 +443,7 @@ def create_monthly_income_expenses_chart(
     bar_width = 0.15
 
     # SET the positions of the bars on the x-axis
-    bar_gap = 0.05  
+    bar_gap = 0.07  
     
     # CALCULATE the x-axis positions for each month
     x_positions = np.arange(len(months))
@@ -335,15 +456,19 @@ def create_monthly_income_expenses_chart(
         income_totals,
         width=bar_width,
         label="Income",
-        color="limegreen"
-    )
+        color="limegreen",
+        alpha = 1.0,
+        zorder = 2   
+        )
 
     expense_bars = income_axis.bar(
         expense_positions,
         expense_totals,
         width=bar_width,
         label="Expenses",
-        color="red"
+        color="red",
+        alpha = 1.0,
+        zorder = 2
     )
 
     income_axis.set_xticks(x_positions)
@@ -353,8 +478,19 @@ def create_monthly_income_expenses_chart(
     income_axis.set_ylabel("Amount ($)")
     income_axis.set_title("MONTHLY INCOME vs EXPENSES",fontsize=15, fontweight="bold", color="black")
 
-    income_axis.legend(loc = "lower center",bbox_to_anchor=(0.5, -0.3),
-    ncol=2,fontsize=11,frameon=False)
+    income_axis.spines["top"].set_visible(False)
+    income_axis.spines["right"].set_visible(False)
+
+    income_axis.yaxis.grid(
+        True,
+        linestyle="--",
+        alpha = 1.0,
+        color = "lightgrey",
+        zorder = 2
+    )
+
+    income_axis.legend(loc = "lower center",bbox_to_anchor=(0.1, -0.35),
+    ncol=1,fontsize=11,frameon=False, columnspacing = 5)
     
     return income_bars, expense_bars
 
@@ -400,21 +536,19 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     card = FancyBboxPatch(
         (-0.15, -0.32),
-        1.25,
-        1.39,
+        1.17,
+        1.47,
         transform=income_axis.transAxes,
         boxstyle="round,pad=0.02,rounding_size=0.03",
         facecolor="white",
-        edgecolor="lightgrey",
+        edgecolor="lightblue",
         linewidth=1.5,
         clip_on=False,
         zorder=-1
 )
 
     income_axis.add_patch(card)
-
-    
-    
+   
 def create_monthly_transaction_count_chart(transaction_axis,months,transaction_counts):
     # CALCULATE the x-axis positions for each month
 
@@ -425,7 +559,9 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
         x_positions,
         transaction_counts,
         width=bar_width,
-        color="blue"
+        color="blue",
+        alpha = 1.0,
+        zorder = 2
     )
 
     transaction_axis.set_xticks(x_positions)
@@ -434,6 +570,16 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
     transaction_axis.set_xlabel("Month")
     transaction_axis.set_ylabel("Transactions")
     transaction_axis.set_title("Monthly Transactions")
+
+    transaction_axis.yaxis.grid(
+        True,
+        linestyle="--",
+        color = "grey",
+        alpha=0.3
+    )
+
+    transaction_axis.spines["top"].set_visible(False)
+    transaction_axis.spines["right"].set_visible(False)
 
 def style_monthly_transaction_count_summary():
     pass
@@ -451,6 +597,11 @@ def create_financial_report(
     transaction_counts
 ):
 
+    financial_health, savings_rate = determine_financial_health(
+        total_income,
+        total_expenses
+    )
+
     # Create report
 
     report_figure = plt.figure(figsize=(14, 8))
@@ -464,25 +615,21 @@ def create_financial_report(
     
     report_figure.text(0.5, 0.9, report_period, ha = "center", fontsize=15)
     
-    report_layout = report_figure.add_gridspec(3,2, height_ratios=[0.2, 0.8, 1.6])
+    report_layout = report_figure.add_gridspec(4,2, height_ratios=[0.2, 0.8, 0.35, 1.6])
+    report_figure.subplots_adjust(top=0.84,bottom=0.18,hspace=0.2,wspace=0.30)
+
     banner_axis = report_figure.add_subplot(report_layout[0, :])
+
     financial_summary = report_figure.add_subplot(report_layout[1, :])
-    income_axis = report_figure.add_subplot(report_layout[2, 0])
-    transaction_axis = report_figure.add_subplot(report_layout[2, 1])
+    income_axis = report_figure.add_subplot(report_layout[3, 0])
+    transaction_axis = report_figure.add_subplot(report_layout[3, 1])
     financial_summary.axis("off")
+
     banner_axis.set_facecolor("darkblue")
     banner_axis.set_xticks([])
     banner_axis.set_yticks([])
-    banner_axis.text(
-        0.5,
-        0.5,
-        "Financial Summary",
-        ha="center",
-        va="center",
-        fontsize=14,
-        fontweight="bold",
-        color="white"
-)
+    banner_axis.text(0.5, 0.5,"Financial Summary",ha="center", va="center",fontsize=14,
+        fontweight="bold",color="white")
     
     financial_summary_data = [
     ["Transactions", transaction_count],
@@ -520,7 +667,7 @@ def create_financial_report(
 
     report_figure.subplots_adjust(
         top=0.84,
-        hspace=0.2,
+        hspace=0.35,
         wspace=0.30
     )
 
