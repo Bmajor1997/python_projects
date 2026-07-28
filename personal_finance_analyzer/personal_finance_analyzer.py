@@ -403,7 +403,7 @@ def style_financial_table(financial_table):
 
    return None
 
-def create_financial_health_summary(financial_health_axis,financial_health,savings_rate,formatted_savings_rate,):
+def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
     financial_health_title = "Financial Health"
     status_label = "Status:"
@@ -411,11 +411,11 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     unavailable_rate_text = "N/A"
 
     card_x_position = 0.01
-    card_y_position = 0.1
+    card_y_position = 0.35
     card_width = .98
     card_height = .8
 
-    common_vertical_position = .5
+    common_vertical_position = .68
     title_horizontal_position = .16
     status_label_horizontal_position = .41
     savings_label_horizontal_position = .74
@@ -428,10 +428,105 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     card_border_width = 1.5
     corner_rounding_size = .03
 
-    financial_health_axis.set_visable(False)
+    financial_health_axis.axis("off")
 
+    (
+    status_foreground_color,
+    status_background_color
+    ) = get_financial_health_colors(financial_health)
+
+    if savings_rate == None:
+        formatted_saving_rate = unavailable_rate_text
+    else:
+       formatted_saving_rate = f"{savings_rate:.2f}%"
+
+    status_text = financial_health
+    savings_rate_text = formatted_saving_rate
+
+    financial_health_card = FancyBboxPatch(
+    (card_x_position, card_y_position),
+    card_width,
+    card_height,
+    transform=financial_health_axis.transAxes,
+    boxstyle=(
+        f"round,pad=0.02,"
+        f"rounding_size={corner_rounding_size}"
+    ),
+    facecolor=status_background_color,
+    edgecolor=status_foreground_color,
+    linewidth=card_border_width,
+    clip_on=False,
+    zorder=0
+)
+    financial_health_axis.add_patch(financial_health_card)
+
+    financial_health_axis.text(
+        title_horizontal_position,
+        common_vertical_position,
+        financial_health_title,
+        transform=financial_health_axis.transAxes,
+        ha="center",
+        va="center",
+        fontsize=title_font_size,
+        fontweight="bold",
+        color=status_foreground_color,
+        zorder=1
+    )
     
+    financial_health_axis.text(
+        status_label_horizontal_position,
+        common_vertical_position,
+        status_label,
+        transform=financial_health_axis.transAxes,
+        ha="right",
+        va="center",
+        fontsize=label_font_size,
+        fontweight="normal",
+        color="black",
+        zorder=1
+    )
 
+    financial_health_axis.text(
+        status_label_horizontal_position,
+        common_vertical_position,
+        status_text,
+        transform=financial_health_axis.transAxes,
+        ha="left",
+        va="center",
+        fontsize=result_font_size,
+        fontweight="bold",
+        color=status_foreground_color,
+        zorder=1
+    )
+
+    financial_health_axis.text(
+        savings_label_horizontal_position,
+        common_vertical_position,
+        savings_rate_label,
+        transform=financial_health_axis.transAxes,
+        ha="right",
+        va="center",
+        fontsize=label_font_size,
+        fontweight="normal",
+        color="black",
+        zorder=1
+    )
+
+    financial_health_axis.text(
+        savings_result_horizontal_position,
+        common_vertical_position,
+        savings_rate_text,
+        transform=financial_health_axis.transAxes,
+        ha="left",
+        va="center",
+        fontsize=result_font_size,
+        fontweight="bold",
+        color=status_foreground_color,
+        zorder=1
+    )
+
+    return None
+    
 def create_monthly_income_expenses_chart(
         income_axis,
         months,
@@ -583,7 +678,6 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
 
 def style_monthly_transaction_count_summary():
     pass
-
 def create_financial_report(
     transaction_count,
     start_date,
@@ -609,55 +703,104 @@ def create_financial_report(
     formatted_start_date = start_date.strftime("%B %d, %Y")
     formatted_end_date = end_date.strftime("%B %d, %Y")
 
-    report_period = (f"Reporting Period: {formatted_start_date} - {formatted_end_date}")
+    report_period = (
+        f"Reporting Period: "
+        f"{formatted_start_date} - {formatted_end_date}"
+    )
 
-    report_figure.suptitle(program_title, fontsize=23, fontweight="bold", color="Black")
-    
-    report_figure.text(0.5, 0.9, report_period, ha = "center", fontsize=15)
-    
-    report_layout = report_figure.add_gridspec(4,2, height_ratios=[0.2, 0.8, 0.35, 1.6])
-    report_figure.subplots_adjust(top=0.84,bottom=0.18,hspace=0.2,wspace=0.30)
+    report_figure.suptitle(
+        program_title,
+        fontsize=23,
+        fontweight="bold",
+        color="Black"
+    )
 
-    banner_axis = report_figure.add_subplot(report_layout[0, :])
+    report_figure.text(
+        0.5,
+        0.9,
+        report_period,
+        ha="center",
+        fontsize=15
+    )
 
-    financial_summary = report_figure.add_subplot(report_layout[1, :])
-    income_axis = report_figure.add_subplot(report_layout[3, 0])
-    transaction_axis = report_figure.add_subplot(report_layout[3, 1])
+    report_layout = report_figure.add_gridspec(
+        4,
+        2,
+        height_ratios=[0.2, 0.8, 0.35, 1.6]
+    )
+
+    banner_axis = report_figure.add_subplot(
+        report_layout[0, :]
+    )
+
+    financial_summary = report_figure.add_subplot(
+        report_layout[1, :]
+    )
+
+    financial_health_axis = report_figure.add_subplot(
+        report_layout[2, :]
+    )
+
+    income_axis = report_figure.add_subplot(
+        report_layout[3, 0]
+    )
+
+    transaction_axis = report_figure.add_subplot(
+        report_layout[3, 1]
+    )
+
     financial_summary.axis("off")
 
     banner_axis.set_facecolor("darkblue")
     banner_axis.set_xticks([])
     banner_axis.set_yticks([])
-    banner_axis.text(0.5, 0.5,"Financial Summary",ha="center", va="center",fontsize=14,
-        fontweight="bold",color="white")
-    
+
+    banner_axis.text(
+        0.5,
+        0.5,
+        "Financial Summary",
+        ha="center",
+        va="center",
+        fontsize=14,
+        fontweight="bold",
+        color="white"
+    )
+
     financial_summary_data = [
-    ["Transactions", transaction_count],
-    ["Total Income", f"${total_income:,.2f}"],
-    ["Total Expenses", f"${total_expenses:,.2f}"],
-    ["Net Balance", f"${net_balance:,.2f}"]
-]
+        ["Transactions", transaction_count],
+        ["Total Income", f"${total_income:,.2f}"],
+        ["Total Expenses", f"${total_expenses:,.2f}"],
+        ["Net Balance", f"${net_balance:,.2f}"]
+    ]
 
     financial_table = financial_summary.table(
-    cellText=financial_summary_data,
-    colLabels=["Category", "Amount"],
-    loc="center"
-)
+        cellText=financial_summary_data,
+        colLabels=["Category", "Amount"],
+        loc="center"
+    )
 
     style_financial_table(financial_table)
-   
-    income_bars, expense_bars = create_monthly_income_expenses_chart(
-    income_axis,
-    months,
-    income_totals,
-    expense_totals
-)
+
+    create_financial_health_summary(
+        financial_health_axis,
+        financial_health,
+        savings_rate
+    )
+
+    income_bars, expense_bars = (
+        create_monthly_income_expenses_chart(
+            income_axis,
+            months,
+            income_totals,
+            expense_totals
+        )
+    )
 
     style_monthly_income_expenses_chart(
         income_axis,
         income_bars,
         expense_bars
-)
+    )
 
     create_monthly_transaction_count_chart(
         transaction_axis,
@@ -667,6 +810,7 @@ def create_financial_report(
 
     report_figure.subplots_adjust(
         top=0.84,
+        bottom=0.18,
         hspace=0.35,
         wspace=0.30
     )
@@ -674,7 +818,6 @@ def create_financial_report(
     plt.show()
 
     return report_figure
-
 def save_financial_report(income_expense_chart,transaction_count_chart):
 
     chart_prompt = "Would you like to save this chart as an image? (Y/N): "
