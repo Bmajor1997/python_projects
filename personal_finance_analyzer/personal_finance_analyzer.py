@@ -4,7 +4,9 @@
 # ============================================================
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
+from matplotlib.patches import FancyBboxPatch, PathPatch
+from pathlib import Path
+from matplotlib.path import Path as MplPath
 from pathlib import Path
 from tkinter import filedialog
 import tkinter as tk
@@ -362,8 +364,7 @@ def get_financial_health_colors(financial_health):
         status_background_color
     ) = selected_colors
 
-    return status_forground_color, status_background_color
-   
+    return status_forground_color, status_background_color   
 def style_financial_table(financial_table):
 
    fin_tab = financial_table.get_celld()
@@ -402,7 +403,20 @@ def style_financial_table(financial_table):
    financial_table.scale(1.0, 2.0)
 
    return None
+def style_net_balance_row(financial_table,financial_health):
+    
+    (
+        status_foreground_color,
+        status_background_color
+    ) = get_financial_health_colors(
+        financial_health
+    )
 
+    net_balance_row_index = 4
+    net_balance_border_width = 1.5
+
+    for column_index in range(0,4):
+        
 def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
     financial_health_title = "Financial Health"
@@ -603,7 +617,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     for income_bar in income_bars:
         bar_height = income_bar.get_height()
         bar_center = (income_bar.get_x() + income_bar.get_width() / 2)
-        formatted_value = f"${bar_height:,.2f}"
+        formatted_value = f"${bar_height:,.0f}"
         income_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -617,7 +631,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     for expense_bar in expense_bars:
         bar_height = expense_bar.get_height()
         bar_center = (expense_bar.get_x() + expense_bar.get_width() / 2)
-        formatted_value = f"${bar_height:,.2f}"
+        formatted_value = f"${bar_height:,.0f}"
         income_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -669,7 +683,7 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
 
     return transaction_bars
 
-def style_monthly_transaction_count_chart( transaction_axis,transaction_bars):
+def style_monthly_transaction_count_chart(transaction_axis,transaction_bars):
 
     label_offset_percentage = 0.02
     y_axis_expansion = 0.08
@@ -724,6 +738,123 @@ def style_monthly_transaction_count_chart( transaction_axis,transaction_bars):
 
     return None
 
+def round_bar_tops(chart_axis, bars,):
+
+    vertical_radius_percentage = 0.02
+    horizontal_radius_percentage = 0.25
+    current_y_min, current_y_max = chart_axis.get_ylim()
+
+    y_axis_range = current_y_max - current_y_min
+
+    for bar in bars:
+
+        bar_x = bar.get_x()
+        bar_y = bar.get_y()
+        bar_width = bar.get_width()
+        bar_height = bar.get_height()
+
+        if bar_height <= 0:
+            continue
+
+        horizontal_radius = (
+            bar_width * horizontal_radius_percentage
+        )
+
+        calculated_vertical_radius = (
+            y_axis_range * vertical_radius_percentage
+        )
+
+        maximum_vertical_radius = bar_height / 2
+
+        if calculated_vertical_radius < maximum_vertical_radius:
+            vertical_radius = calculated_vertical_radius
+        else:
+            vertical_radius = maximum_vertical_radius
+
+        bar_color = bar.get_facecolor()
+        bar_zorder = bar.get_zorder()
+
+        path_vertices = [
+            (bar_x, bar_y),
+
+            (
+                bar_x,
+                bar_y + bar_height - vertical_radius
+            ),
+
+            (
+                bar_x,
+                bar_y + bar_height
+            ),
+
+            (
+                bar_x + horizontal_radius,
+                bar_y + bar_height
+            ),
+
+            (
+                bar_x + bar_width - horizontal_radius,
+                bar_y + bar_height
+            ),
+
+            (
+                bar_x + bar_width,
+                bar_y + bar_height
+            ),
+
+            (
+                bar_x + bar_width,
+                bar_y + bar_height - vertical_radius
+            ),
+
+            (
+                bar_x + bar_width,
+                bar_y
+            ),
+
+            (
+                bar_x,
+                bar_y
+            ),
+
+            (
+                bar_x,
+                bar_y
+            )
+        ]
+
+        path_codes = [
+            MplPath.MOVETO,
+            MplPath.LINETO,
+            MplPath.CURVE3,
+            MplPath.CURVE3,
+            MplPath.LINETO,
+            MplPath.CURVE3,
+            MplPath.CURVE3,
+            MplPath.LINETO,
+            MplPath.LINETO,
+            MplPath.CLOSEPOLY
+        ]
+
+        rounded_bar_path = MplPath(
+            path_vertices,
+            path_codes
+        )
+
+        rounded_bar = PathPatch(
+            rounded_bar_path,
+            facecolor=bar_color,
+            edgecolor="none",
+            zorder=bar_zorder
+        )
+
+        bar.set_visible(False)
+
+        chart_axis.add_patch(
+            rounded_bar
+        )
+
+    return None
 def create_financial_report(
     transaction_count,
     start_date,
@@ -848,12 +979,6 @@ def create_financial_report(
         expense_bars
     )
 
-    create_monthly_transaction_count_chart(
-        transaction_axis,
-        months,
-        transaction_counts
-    )
-
     transaction_bars = create_monthly_transaction_count_chart(
         transaction_axis,
         months,
@@ -863,6 +988,21 @@ def create_financial_report(
     style_monthly_transaction_count_chart(
         transaction_axis,
         transaction_bars
+    )
+
+    round_bar_tops(
+        income_axis,
+        income_bars
+    )
+
+    round_bar_tops(
+        income_axis,
+        expense_bars
+    )
+
+    round_bar_tops(
+        transaction_axis,
+        transaction_bars,
     )
 
     report_figure.subplots_adjust(
