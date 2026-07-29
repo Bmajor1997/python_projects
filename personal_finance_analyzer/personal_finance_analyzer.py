@@ -288,7 +288,7 @@ def determine_financial_health(total_income, total_expenses):
     needs_attention_threshold = 5
     caution_threshold = 0
     weak_threshold = -10
-    at_risk_threshold = -25
+    very_weak_threshold = -25
     
 
     # SET the invalid-income error message
@@ -332,11 +332,11 @@ def determine_financial_health(total_income, total_expenses):
     elif savings_rate >= weak_threshold:
         financial_health = weak_status
 
-    elif savings_rate >= at_risk_threshold:
-        financial_health = at_risk_status
+    elif savings_rate >= very_weak_threshold:
+        financial_health = very_weak_status
 
     else:
-        financial_health = very_weak_status
+        financial_health =at_risk_status 
 
     return financial_health, savings_rate
 def get_financial_health_colors(financial_health):
@@ -592,6 +592,7 @@ def create_monthly_income_expenses_chart(
 def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     current_ylim, current_ymax = income_axis.get_ylim()
+
     label_offset_percentage = 0.02
     y_axis_expansion_percentage = 0.08
     expansion_amount = current_ymax * y_axis_expansion_percentage
@@ -650,7 +651,7 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
     x_positions = np.arange(len(months))
     bar_width = 0.15
 
-    transaction_axis.bar(
+    transaction_bars = transaction_axis.bar(
         x_positions,
         transaction_counts,
         width=bar_width,
@@ -664,7 +665,37 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
 
     transaction_axis.set_xlabel("Month")
     transaction_axis.set_ylabel("Transactions")
-    transaction_axis.set_title("Monthly Transactions")
+    transaction_axis.set_title("MONTHLY TRANSACTIONS",fontsize=15, fontweight="bold", color="black" )
+
+    return transaction_bars
+
+def style_monthly_transaction_count_chart( transaction_axis,transaction_bars):
+
+    label_offset_percentage = 0.02
+    y_axis_expansion = 0.08
+
+    current_ymin, current_ymax = transaction_axis.get_ylim()
+
+    expansion_amount = current_ymax * y_axis_expansion
+    new_ymax = current_ymax + expansion_amount
+
+    label_offset = current_ymax * label_offset_percentage
+
+    for transaction_bar in transaction_bars:
+        bar_height = transaction_bar.get_height()
+        bar_center = (transaction_bar.get_x() + transaction_bar.get_width() / 2)
+        formatted_count = f"{bar_height:,.0f}"
+        transaction_axis.text(
+            bar_center,
+            bar_height + label_offset,
+            formatted_count,
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color="black"
+        )
+
+    transaction_axis.set_ylim(current_ymin, new_ymax)
 
     transaction_axis.yaxis.grid(
         True,
@@ -675,9 +706,24 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
 
     transaction_axis.spines["top"].set_visible(False)
     transaction_axis.spines["right"].set_visible(False)
+        
+    card = FancyBboxPatch(
+            (-0.15, -0.32),
+            1.17,
+            1.47,
+            transform=transaction_axis.transAxes,
+            boxstyle="round,pad=0.02,rounding_size=0.03",
+            facecolor="white",
+            edgecolor="lightblue",
+            linewidth=1.5,
+            clip_on=False,
+            zorder=-1
+    )
 
-def style_monthly_transaction_count_summary():
-    pass
+    transaction_axis.add_patch(card)  
+
+    return None
+
 def create_financial_report(
     transaction_count,
     start_date,
@@ -806,6 +852,17 @@ def create_financial_report(
         transaction_axis,
         months,
         transaction_counts
+    )
+
+    transaction_bars = create_monthly_transaction_count_chart(
+        transaction_axis,
+        months,
+        transaction_counts
+    )
+
+    style_monthly_transaction_count_chart(
+        transaction_axis,
+        transaction_bars
     )
 
     report_figure.subplots_adjust(
