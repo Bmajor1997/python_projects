@@ -415,8 +415,22 @@ def style_net_balance_row(financial_table,financial_health):
     net_balance_row_index = 4
     net_balance_border_width = 1.5
 
-    for column_index in range(0,4):
-        
+    for column_index in range(2):
+        net_balance_cell = financial_table[
+            net_balance_row_index,
+            column_index
+        ]
+        net_balance_cell.set_facecolor(status_background_color)
+        net_balance_cell.set_edgecolor(status_foreground_color)
+
+        net_balance_cell.set_linewidth(net_balance_border_width)
+        cell_text = net_balance_cell.get_text()
+
+        cell_text.set_color(status_foreground_color)
+        cell_text.set_fontweight("bold")
+
+    return None
+    
 def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
     financial_health_title = "Financial Health"
@@ -954,6 +968,15 @@ def create_financial_report(
         cellText=financial_summary_data,
         colLabels=["Category", "Amount"],
         loc="center"
+    )
+
+    style_financial_table(
+        financial_table
+    )
+
+    style_net_balance_row(
+        financial_table,
+        financial_health
     )
 
     style_financial_table(financial_table)
