@@ -14,7 +14,7 @@ import numpy as np
 # ============================================================
 # APPLICATION INFORMATIONS
 # ============================================================
-application_version = "Beta version 1.0"
+application_version = "Beta version 2.0"
 program_title = "Financial Insights Report"
 # ============================================================
 # USER INTERFACES
@@ -59,10 +59,25 @@ weak_status = "Weak"
 at_risk_status = "At Risk"
 very_weak_status = "Very Weak"
 unable_to_determine_status = "Unable to Determine"
+
+income_transaction_type = "Income"
+expense_transaction_type = "Expense"
+transfer_transaction_type = "Transfer"
+zero_amount_transaction_type = "Zero Amount"
+
+default_transfer_identifiers = [
+    "internal transfer",
+    "account transfer"
+]
+
+user_transfer_identifiers = [
+    "moneylink"
+]
 # ============================================================
-# MAIN TEST FUNCTIONS
+# DISPLAY FUNCTIONS
 # ============================================================
 def display_welcome_screen():
+
 
     print(divider)
     print(program_title)
@@ -70,6 +85,9 @@ def display_welcome_screen():
     print(divider)
     print(welcome_message)
     print(divider)
+# ============================================================
+# FILE SELECTION AND VALIDATION FUNCTIONS
+# ============================================================
 def select_xlsx_file():
 
     root = tk.Tk()
@@ -87,7 +105,7 @@ def select_xlsx_file():
 
     return selected_file
 def validate_xlsx_file(selected_file):
-
+    
     xlsx_path = Path(selected_file)
 
     if not xlsx_path.exists():
@@ -100,6 +118,9 @@ def validate_xlsx_file(selected_file):
         raise Exception(empty_file_error)
 
     return xlsx_path
+def validate_xlsx_files(selected_files):
+    pass
+
 def open_xlsx(xlsx_path):
 
     try:
@@ -109,6 +130,13 @@ def open_xlsx(xlsx_path):
         return None
 
     return xlsx_file
+
+
+def open_xlsx_files(xlsx_paths):
+    pass
+# ============================================================
+# COLUMN IDENTIFICATION FUNCTIONS
+# ============================================================
 def identify_date_column(xlsx_file):
     possible_date_column_names = [
         "date",
@@ -128,15 +156,9 @@ def identify_date_column(xlsx_file):
 
     no_date_column_found_error = "No Date Column Found."
 
-    normalized_columns = (
-        xlsx_file.columns
-        .str.strip()
-        .str.lower()
-    )
+    normalized_columns = (xlsx_file.columns.str.strip().str.lower())
 
-    possible_date_columns = pd.Index(
-        possible_date_column_names
-    )
+    possible_date_columns = pd.Index(possible_date_column_names)
 
     matching_columns = normalized_columns.intersection(
         possible_date_columns
@@ -177,6 +199,7 @@ def determine_date_range(xlsx_file,date_column_name ):
 
     return start_date, end_date
 def identify_amount_column(xlsx_file):
+
     possible_amount_column_names = [
         "amount",
         "transaction amount",
@@ -188,65 +211,207 @@ def identify_amount_column(xlsx_file):
 
     no_amount_column_found_error = "Could not find Amount column"
 
-    normalized_columns = (
-        xlsx_file.columns
-        .str.strip()
-        .str.lower()
-    )
+    normalized_columns = (xlsx_file.columns.str.strip().str.lower())
 
-    possible_amount_columns = pd.Index(
-        possible_amount_column_names
-    )
+    possible_amount_columns = pd.Index(possible_amount_column_names)
 
-    matching_amount = normalized_columns.intersection(
-        possible_amount_columns
-    )
+    matching_amount = normalized_columns.intersection(possible_amount_columns)
 
     if len(matching_amount) == 0:
         raise ValueError(no_amount_column_found_error)
 
     matching_column_name = matching_amount[0]
 
-    column_position = normalized_columns.get_loc(
-        matching_column_name
-    )
+    column_position = normalized_columns.get_loc(matching_column_name)
 
     amount_column_name = xlsx_file.columns[column_position]
 
     return amount_column_name
+def identify_description_column(xlsx_file):
+
+     description_column_name = [
+            "description",
+            "details"
+        ]
+    
+     missing_description_column = "Could not find transaction description column"
+     normalized_columns = xlsx_file.columns.str.strip().str.lower()
+
+     matching_columns = normalized_columns.intersection(pd.Index(description_column_name))
+
+     if matching_columns.empty:
+        raise ValueError(missing_description_column)
+
+     matching_column_name = matching_columns[0]
+
+     column_position = normalized_columns.get_loc(
+        matching_column_name
+    )
+
+     description_column_name = (
+        xlsx_file.columns[column_position]
+    )
+
+     return description_column_name
+# ============================================================
+# STATEMENT PREPARATION FUNCTIONS
+# ============================================================
+def standardize_statement_columns(xlsx_file):
+    pass
+
+
+def combine_statements(standardized_statements):
+    pass
+
+
+def remove_duplicate_transactions(combined_transactions):
+    pass
+
+
+def sort_transactions_by_date(combined_transactions):
+    pass
+
+
+def filter_complete_months(combined_transactions):
+    pass
+
+
+def prepare_combined_statement_data(xlsx_files):
+    pass
+# ============================================================
+# TRANSACTION CLASSIFICATION FUNCTIONS
+# ============================================================
+def create_transfer_rule_map(user_owned_account_identifiers):
+    pass
+
+def classify_transactions(xlsx_file,description_column_name,amount_values):
+
+    invalid_amount_error = (
+        "Unable to classify transactions because one or more "
+        "amounts are missing or invalid."
+    )
+
+    
+    if amount_values.empty or amount_values.isna().any():
+        raise ValueError(invalid_amount_error)
+
+    normalized_descriptions = xlsx_file[
+        description_column_name
+    ]
+
+    normalized_descriptions = (
+        normalized_descriptions
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    transfer_identifiers = (
+        default_transfer_identifiers
+        + user_transfer_identifiers
+    )
+
+    transfer_mask = pd.Series(
+        False,
+        index=xlsx_file.index
+    )
+
+    for transfer_identifier in transfer_identifiers:
+        current_identifier_mask = (
+            normalized_descriptions.str.contains(
+                transfer_identifier,
+                regex=False
+            )
+        )
+
+        transfer_mask = (
+            transfer_mask | current_identifier_mask
+        )
+
+    transaction_types = pd.Series(
+        zero_amount_transaction_type,
+        index=xlsx_file.index,
+        dtype="object"
+    )
+
+    transaction_types.loc[
+        transfer_mask
+    ] = transfer_transaction_type
+
+    transaction_types.loc[
+        (amount_values > 0) & (~transfer_mask)
+    ] = income_transaction_type
+
+    transaction_types.loc[
+        (amount_values < 0) & (~transfer_mask)
+    ] = expense_transaction_type
+
+    return transaction_types
+
+def categorize_transactions(xlsx_file,description_column_name,transaction_types):
+    pass
+# ============================================================
+# FINANCIAL CALCULATION FUNCTIONS
+# ============================================================
 def count_transactions(xlsx_file):
 
     transaction_count = len(xlsx_file)
 
     return transaction_count
-def calculate_financial_summary(xlsx_file):
+def calculate_financial_summary(xlsx_file,description_column_name):
 
     transaction_count = count_transactions(xlsx_file)
+
     amount_column_name = identify_amount_column(xlsx_file)
 
     amount_values = xlsx_file[amount_column_name]
 
-    amount_values =  amount_values.astype(str)
-    amount_values = amount_values.str.replace("$", "", regex=False)
-    amount_values = amount_values.str.replace(",", "", regex=False)
-    amount_values = pd.to_numeric(
-        amount_values,
-        errors="coerce"
+    amount_values = amount_values.astype(str)
+
+    amount_values = amount_values.str.replace("$","",regex=False)
+
+    amount_values = amount_values.str.replace(",","",regex=False)
+
+    amount_values = pd.to_numeric(amount_values,errors="coerce")
+
+    transaction_types = classify_transactions(xlsx_file,description_column_name,amount_values)
+
+    income_amounts = amount_values[
+        transaction_types == income_transaction_type
+    ]
+
+    expense_amounts = amount_values[
+        transaction_types == expense_transaction_type
+    ]
+
+    total_income = income_amounts.sum()
+
+    total_expenses = expense_amounts.sum()
+
+    net_balance = (
+        total_income + total_expenses
     )
-    amount_values = amount_values.dropna()
 
-    total_income = amount_values[amount_values > 0].sum()
-
-    total_expense = amount_values[amount_values < 0].sum()
-
-    net_balance = total_income + total_expense
-
-    return transaction_count,total_income,total_expense,net_balance, amount_values
-def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
+    return (
+        transaction_count,
+        total_income,
+        total_expenses,
+        net_balance,
+        amount_values,
+        transaction_types
+    )
+def calculate_monthly_summary(
+    xlsx_file,
+    date_column_name,
+    amount_values,
+    transaction_types
+):
 
     monthly_data = pd.DataFrame({
         "date": xlsx_file[date_column_name],
-        "amount": amount_values
+        "amount": amount_values,
+        "transaction_type": transaction_types
     })
 
     monthly_data["date"] = pd.to_datetime(
@@ -255,33 +420,184 @@ def calculate_monthly_summary(xlsx_file, date_column_name, amount_values):
     )
 
     monthly_data = monthly_data.dropna(
-        subset=["date", "amount"]
+        subset=["date", "amount", "transaction_type"]
     )
 
-    monthly_data["month"] = monthly_data["date"].dt.month_name()
+    monthly_data["month"] = (
+        monthly_data["date"].dt.month_name()
+    )
 
     monthly_income = monthly_data[
-        monthly_data["amount"] > 0
-        ]
+        monthly_data["transaction_type"]
+        == income_transaction_type
+    ]
 
     monthly_expenses = monthly_data[
-        monthly_data["amount"] < 0
-        ]
+        monthly_data["transaction_type"]
+        == expense_transaction_type
+    ]
 
-    monthly_income = monthly_income.groupby("month")["amount"].sum()
-    monthly_expenses = monthly_expenses.groupby("month")["amount"].sum()
+    monthly_income_totals = (
+        monthly_income.groupby("month")["amount"].sum()
+    )
 
-    monthly_transactions = monthly_data.groupby("month").size()
+    monthly_expense_totals = (
+        monthly_expenses.groupby("month")["amount"].sum()
+    )
 
-    months = monthly_transactions.index.tolist()
+    monthly_income_transaction_counts = (
+        monthly_income.groupby("month").size()
+    )
 
-    income_totals = monthly_income.tolist()
+    monthly_expense_transaction_counts = (
+        monthly_expenses.groupby("month").size()
+    )
 
-    expense_totals = monthly_expenses.abs().tolist()
+    monthly_transactions = (
+        monthly_data.groupby("month").size()
+    )
 
-    transaction_counts = monthly_transactions.tolist()
+    months = monthly_transactions.index
 
-    return months, income_totals, expense_totals, transaction_counts
+    monthly_income_totals = (
+        monthly_income_totals.reindex(
+            months,
+            fill_value=0
+        )
+    )
+
+    monthly_expense_totals = (
+        monthly_expense_totals.reindex(
+            months,
+            fill_value=0
+        )
+    )
+
+    monthly_income_transaction_counts = (
+        monthly_income_transaction_counts.reindex(
+            months,
+            fill_value=0
+        )
+    )
+
+    monthly_expense_transaction_counts = (
+        monthly_expense_transaction_counts.reindex(
+            months,
+            fill_value=0
+        )
+    )
+
+    for month_name in months:
+
+        if (
+            monthly_income_transaction_counts.loc[
+                month_name
+            ] == 0
+        ):
+            raise ValueError(
+                "Monthly transaction data is incomplete: "
+                f"{month_name} has no income transactions."
+            )
+
+        if (
+            monthly_expense_transaction_counts.loc[
+                month_name
+            ] == 0
+        ):
+            raise ValueError(
+                "Monthly transaction data is incomplete: "
+                f"{month_name} has no expense transactions."
+            )
+
+    months = months.tolist()
+
+    income_totals = (
+        monthly_income_totals.tolist()
+    )
+
+    expense_totals = (
+        monthly_expense_totals.abs().tolist()
+    )
+
+    income_transaction_counts = (
+        monthly_income_transaction_counts.tolist()
+    )
+
+    expense_transaction_counts = (
+        monthly_expense_transaction_counts.tolist()
+    )
+
+    return (
+        months,
+        income_totals,
+        expense_totals,
+        income_transaction_counts,
+        expense_transaction_counts
+    )
+def calculate_monthly_transfer_summary(
+    xlsx_file,
+    date_column_name,
+    amount_values,
+    transaction_types
+):
+    pass
+
+def calculate_expense_category_summary(
+    amount_values,
+    transaction_types,
+    transaction_categories
+):
+    pass
+def calculate_income_category_summary(
+    amount_values,
+    transaction_types,
+    transaction_categories
+):
+    pass
+# ============================================================
+# AI FINANCIAL INSIGHT FUNCTIONS
+# ============================================================
+def prepare_financial_insight_data(
+    financial_summary,
+    monthly_summary,
+    transfer_summary
+):
+    pass
+
+
+def generate_financial_insights(
+    financial_insight_data
+):
+    pass
+
+def validate_financial_insights(
+    financial_insights
+):
+    pass
+# ============================================================
+# AI CHATBOT FUNCTIONS
+# ============================================================
+def build_financial_chatbot_context(
+    financial_summary,
+    monthly_summary,
+    transfer_summary,
+    financial_insights
+):
+    pass
+
+def generate_financial_chatbot_response(
+    user_question,
+    chatbot_context
+):
+    pass
+
+def run_financial_chatbot(
+    chatbot_context
+):
+    pass
+# ============================================================
+# FINANCIAL HEALTH  FUNCTIONS
+# ============================================================
 def determine_financial_health(total_income, total_expenses):
 
     # SET the savings-rate thresholds
@@ -365,72 +681,6 @@ def get_financial_health_colors(financial_health):
     ) = selected_colors
 
     return status_forground_color, status_background_color   
-def style_financial_table(financial_table):
-
-   fin_tab = financial_table.get_celld()
-
-   for (row, column), cell in fin_tab.items():
-
-        if row == 0:
-            header_cell = cell
-            header_cell.set_facecolor("darkblue")
-            header_cell.set_text_props(
-                color="white",
-                weight="bold",
-                fontsize=12,
-                ha="center",
-                va="center"
-            )
-            header_cell.set_edgecolor("white")
-            header_cell.set_linewidth(1.0)
-
-        else:
-            data_cell = cell
-
-            if row % 2 == 0:
-                data_cell.set_facecolor("whitesmoke")
-            else:
-                data_cell.set_facecolor("white")
-
-            data_cell.set_text_props(
-                fontsize=10,
-                ha="center",
-                va="center"
-            )
-            data_cell.set_edgecolor("lightgray")
-            data_cell.set_linewidth(0.8)
-
-   financial_table.scale(1.0, 2.0)
-
-   return None
-def style_net_balance_row(financial_table,financial_health):
-    
-    (
-        status_foreground_color,
-        status_background_color
-    ) = get_financial_health_colors(
-        financial_health
-    )
-
-    net_balance_row_index = 4
-    net_balance_border_width = 1.5
-
-    for column_index in range(2):
-        net_balance_cell = financial_table[
-            net_balance_row_index,
-            column_index
-        ]
-        net_balance_cell.set_facecolor(status_background_color)
-        net_balance_cell.set_edgecolor(status_foreground_color)
-
-        net_balance_cell.set_linewidth(net_balance_border_width)
-        cell_text = net_balance_cell.get_text()
-
-        cell_text.set_color(status_foreground_color)
-        cell_text.set_fontweight("bold")
-
-    return None
-    
 def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
     financial_health_title = "Financial Health"
@@ -439,11 +689,11 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     unavailable_rate_text = "N/A"
 
     card_x_position = 0.01
-    card_y_position = 0.35
+    card_y_position = 0.45
     card_width = .98
     card_height = .8
 
-    common_vertical_position = .68
+    common_vertical_position = .80
     title_horizontal_position = .16
     status_label_horizontal_position = .41
     savings_label_horizontal_position = .74
@@ -553,8 +803,51 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         zorder=1
     )
 
-    return None
-    
+    return None   
+# ============================================================
+# TABLE STYLING FUNCTIONS
+# ============================================================
+def style_financial_table(financial_table):
+
+   fin_tab = financial_table.get_celld()
+
+   for (row, column), cell in fin_tab.items():
+
+        if row == 0:
+            header_cell = cell
+            header_cell.set_facecolor("darkblue")
+            header_cell.set_text_props(
+                color="white",
+                weight="bold",
+                fontsize=12,
+                ha="center",
+                va="center"
+            )
+            header_cell.set_edgecolor("white")
+            header_cell.set_linewidth(1.0)
+
+        else:
+            data_cell = cell
+
+            if row % 2 == 0:
+                data_cell.set_facecolor("whitesmoke")
+            else:
+                data_cell.set_facecolor("white")
+
+            data_cell.set_text_props(
+                fontsize=10,
+                ha="center",
+                va="center"
+            )
+            data_cell.set_edgecolor("lightgray")
+            data_cell.set_linewidth(0.8)
+
+   financial_table.scale(1.0, 2.0)
+
+   return None
+# ============================================================
+# INCOME AND EXPENSE CHART FUNCTIONS
+# ============================================================
 def create_monthly_income_expenses_chart(
         income_axis,
         months,
@@ -616,7 +909,6 @@ def create_monthly_income_expenses_chart(
     ncol=1,fontsize=11,frameon=False, columnspacing = 5)
     
     return income_bars, expense_bars
-
 def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     current_ylim, current_ymax = income_axis.get_ylim()
@@ -671,21 +963,41 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
         zorder=-1
 )
 
-    income_axis.add_patch(card)
-   
-def create_monthly_transaction_count_chart(transaction_axis,months,transaction_counts):
+    income_axis.add_patch(card)  
+# ============================================================
+# TRANSACTION-COUNT CHART FUNCTIONS
+# ============================================================
+def create_monthly_income_expense_transaction_chart(transaction_axis,months,income_transaction_counts,
+    expense_transaction_counts):
+
     # CALCULATE the x-axis positions for each month
 
     x_positions = np.arange(len(months))
-    bar_width = 0.15
 
-    transaction_bars = transaction_axis.bar(
-        x_positions,
-        transaction_counts,
+    bar_width = 0.15
+    bar_gap = 0.07
+
+    income_transaction_positions = (x_positions - ((bar_width + bar_gap) / 2))
+    expense_transaction_positions = (x_positions + ((bar_width + bar_gap) / 2))
+
+    income_transaction_bars = transaction_axis.bar(
+        income_transaction_positions,
+        income_transaction_counts,
         width=bar_width,
-        color="blue",
-        alpha = 1.0,
-        zorder = 2
+        color="limegreen",
+        alpha=1.0,
+        zorder=2,
+        label="Income"
+    )
+
+    expense_transaction_bars = transaction_axis.bar(
+        expense_transaction_positions,
+        expense_transaction_counts,
+        width=bar_width,
+        color="red",
+        alpha=1.0,
+        zorder=2,
+        label="Expenses"
     )
 
     transaction_axis.set_xticks(x_positions)
@@ -693,26 +1005,41 @@ def create_monthly_transaction_count_chart(transaction_axis,months,transaction_c
 
     transaction_axis.set_xlabel("Month")
     transaction_axis.set_ylabel("Transactions")
-    transaction_axis.set_title("MONTHLY TRANSACTIONS",fontsize=15, fontweight="bold", color="black" )
+    transaction_axis.set_title("INCOME vs EXPENSE TRANSACTIONS",fontsize=15, fontweight="bold", color="black")
 
-    return transaction_bars
+    transaction_axis.legend(loc = "lower center",bbox_to_anchor=(0.1, -0.35),
+        ncol=1,fontsize=11,frameon=False, columnspacing = 5)
 
-def style_monthly_transaction_count_chart(transaction_axis,transaction_bars):
+    return income_transaction_bars, expense_transaction_bars
+def style_monthly_income_expense_transaction_chart(transaction_axis,income_transaction_bars,
+    expense_transaction_bars):
 
     label_offset_percentage = 0.02
     y_axis_expansion = 0.08
 
-    current_ymin, current_ymax = transaction_axis.get_ylim()
+    current_ymin, current_ymax = (transaction_axis.get_ylim())
 
-    expansion_amount = current_ymax * y_axis_expansion
-    new_ymax = current_ymax + expansion_amount
+    expansion_amount = (current_ymax * y_axis_expansion)
 
-    label_offset = current_ymax * label_offset_percentage
+    new_ymax = (current_ymax + expansion_amount)
 
-    for transaction_bar in transaction_bars:
+    label_offset = (current_ymax * label_offset_percentage)
+
+    all_transaction_bars = (
+        list(income_transaction_bars)
+        + list(expense_transaction_bars)
+    )
+
+    for transaction_bar in all_transaction_bars:
         bar_height = transaction_bar.get_height()
-        bar_center = (transaction_bar.get_x() + transaction_bar.get_width() / 2)
+
+        bar_center = (
+            transaction_bar.get_x()
+            + transaction_bar.get_width() / 2
+        )
+
         formatted_count = f"{bar_height:,.0f}"
+
         transaction_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -723,35 +1050,65 @@ def style_monthly_transaction_count_chart(transaction_axis,transaction_bars):
             color="black"
         )
 
-    transaction_axis.set_ylim(current_ymin, new_ymax)
+    transaction_axis.set_ylim(
+        current_ymin,
+        new_ymax
+    )
 
     transaction_axis.yaxis.grid(
         True,
         linestyle="--",
-        color = "grey",
+        color="grey",
         alpha=0.3
     )
 
-    transaction_axis.spines["top"].set_visible(False)
-    transaction_axis.spines["right"].set_visible(False)
-        
+    transaction_axis.spines[
+        "top"
+    ].set_visible(False)
+
+    transaction_axis.spines[
+        "right"
+    ].set_visible(False)
+
     card = FancyBboxPatch(
-            (-0.15, -0.32),
-            1.17,
-            1.47,
-            transform=transaction_axis.transAxes,
-            boxstyle="round,pad=0.02,rounding_size=0.03",
-            facecolor="white",
-            edgecolor="lightblue",
-            linewidth=1.5,
-            clip_on=False,
-            zorder=-1
+        (-0.15, -0.32),
+        1.17,
+        1.47,
+        transform=transaction_axis.transAxes,
+        boxstyle=(
+            "round,pad=0.02,"
+            "rounding_size=0.03"
+        ),
+        facecolor="white",
+        edgecolor="lightblue",
+        linewidth=1.5,
+        clip_on=False,
+        zorder=-1
     )
 
-    transaction_axis.add_patch(card)  
+    transaction_axis.add_patch(card)
 
     return None
+# ============================================================
+# TRANSFER CHART FUNCTIONS
+# ============================================================
+def create_monthly_transfer_chart(
+    transfer_axis,
+    months,
+    transfer_totals,
+    transfer_counts
+):
+    pass
 
+def style_monthly_transfer_chart(
+    transfer_axis,
+    transfer_total_bars,
+    transfer_count_bars
+):
+    pass
+# ============================================================
+# SHARED CHART STYLING FUNCTIONS
+# ============================================================
 def round_bar_tops(chart_axis, bars,):
 
     vertical_radius_percentage = 0.02
@@ -869,6 +1226,9 @@ def round_bar_tops(chart_axis, bars,):
         )
 
     return None
+# ============================================================
+# REPORT CREATION FUNCTIONS
+# ============================================================
 def create_financial_report(
     transaction_count,
     start_date,
@@ -879,7 +1239,8 @@ def create_financial_report(
     months,
     income_totals,
     expense_totals,
-    transaction_counts
+    income_transaction_counts,
+    expense_transaction_counts
 ):
 
     financial_health, savings_rate = determine_financial_health(
@@ -917,7 +1278,7 @@ def create_financial_report(
     report_layout = report_figure.add_gridspec(
         4,
         2,
-        height_ratios=[0.2, 0.8, 0.35, 1.6]
+        height_ratios=[0.2, 1.0, 0.35, 1.6]
     )
 
     banner_axis = report_figure.add_subplot(
@@ -942,7 +1303,10 @@ def create_financial_report(
 
     financial_summary.axis("off")
 
-    banner_axis.set_facecolor("darkblue")
+    banner_axis.set_facecolor(
+        "darkblue"
+    )
+
     banner_axis.set_xticks([])
     banner_axis.set_yticks([])
 
@@ -974,13 +1338,6 @@ def create_financial_report(
         financial_table
     )
 
-    style_net_balance_row(
-        financial_table,
-        financial_health
-    )
-
-    style_financial_table(financial_table)
-
     create_financial_health_summary(
         financial_health_axis,
         financial_health,
@@ -1002,15 +1359,20 @@ def create_financial_report(
         expense_bars
     )
 
-    transaction_bars = create_monthly_transaction_count_chart(
+    (
+        income_transaction_bars,
+        expense_transaction_bars
+    ) = create_monthly_income_expense_transaction_chart(
         transaction_axis,
         months,
-        transaction_counts
+        income_transaction_counts,
+        expense_transaction_counts
     )
 
-    style_monthly_transaction_count_chart(
+    style_monthly_income_expense_transaction_chart(
         transaction_axis,
-        transaction_bars
+        income_transaction_bars,
+        expense_transaction_bars
     )
 
     round_bar_tops(
@@ -1025,20 +1387,34 @@ def create_financial_report(
 
     round_bar_tops(
         transaction_axis,
-        transaction_bars,
+        income_transaction_bars
+    )
+
+    round_bar_tops(
+        transaction_axis,
+        expense_transaction_bars
     )
 
     report_figure.subplots_adjust(
         top=0.84,
         bottom=0.18,
-        hspace=0.35,
+        hspace=0.20,
         wspace=0.30
     )
 
     plt.show()
 
     return report_figure
-def save_financial_report(income_expense_chart,transaction_count_chart):
+
+def create_financial_insights_summary(
+    financial_insights_axis,
+    financial_insights
+):
+    pass
+# ============================================================
+# REPORT EXPORT FUNCTIONS
+# ============================================================
+def save_financial_report(report_figure):
 
     chart_prompt = "Would you like to save this chart as an image? (Y/N): "
     invalid_save_choice_message = "The input is invalid."
@@ -1062,32 +1438,36 @@ def save_financial_report(income_expense_chart,transaction_count_chart):
                     continue
 
                 else:
-                    income_expense_file_name = (
-                            file_name + "_income_expenses.png"
+                    financial_report_file_name = (
+                        file_name + "_financial_report.png"
                     )
 
-                    transaction_count_file_name = (
-                            file_name + "_transaction_count.png"
+                    report_figure.savefig(
+                        financial_report_file_name
                     )
 
-                    income_expense_chart.savefig(
-                        income_expense_file_name
+                    print(
+                        chart_saved_successfully_message
                     )
 
-                    transaction_count_chart.savefig(
-                        transaction_count_file_name
-                    )
-
-                    print(chart_saved_successfully_message)
                     return
 
         elif save_choice.upper() == "N":
             break
 
         else:
-            print(invalid_save_choice_message)
+            print(
+                invalid_save_choice_message
+            )
 
     return
+def export_financial_data(
+    combined_transactions,
+    financial_summary,
+    monthly_summary,
+    transfer_summary
+):
+    pass
 # ============================================================
 # MAIN
 # ============================================================
@@ -1109,7 +1489,13 @@ def main():
         if xlsx_file is None:
             return
 
-        date_column_name = identify_date_column(xlsx_file)
+        date_column_name = identify_date_column(
+    xlsx_file
+        )
+
+        description_column_name = identify_description_column(
+            xlsx_file
+        )
 
         start_date, end_date = determine_date_range(
             xlsx_file,
@@ -1121,18 +1507,24 @@ def main():
             total_income,
             total_expenses,
             net_balance,
-            amount_values
-        ) = calculate_financial_summary(xlsx_file)
+            amount_values,
+            transaction_types
+        ) = calculate_financial_summary(
+            xlsx_file,
+            description_column_name
+        )
 
         (
             months,
             income_totals,
             expense_totals,
-            transaction_counts
+            income_transaction_counts,
+            expense_transaction_counts
         ) = calculate_monthly_summary(
             xlsx_file,
             date_column_name,
-            amount_values
+            amount_values,
+            transaction_types
         )
 
         report_figure = create_financial_report(
@@ -1145,7 +1537,8 @@ def main():
             months,
             income_totals,
             expense_totals,
-            transaction_counts
+            income_transaction_counts,
+            expense_transaction_counts
         )
 
         save_financial_report(report_figure,)
