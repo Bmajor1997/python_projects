@@ -73,6 +73,13 @@ default_transfer_identifiers = [
 user_transfer_identifiers = [
     "moneylink"
 ]
+not_a_transfer = "Not a Transfer"
+personal_transfer = "Personal Transfer"
+owned_account_transfer = "Owned-Account Transfer"
+unclassified_transfer = "Unclassified Transfer"
+other_income_category = "Other Income"
+other_expense_category = "Other Expense"
+
 # ============================================================
 # DISPLAY FUNCTIONS
 # ============================================================
@@ -130,7 +137,6 @@ def open_xlsx(xlsx_path):
         return None
 
     return xlsx_file
-
 
 def open_xlsx_files(xlsx_paths):
     pass
@@ -282,8 +288,68 @@ def prepare_combined_statement_data(xlsx_files):
 # TRANSACTION CLASSIFICATION FUNCTIONS
 # ============================================================
 def create_transfer_rule_map(user_owned_account_identifiers):
-    pass
 
+   
+    invalid_owned_account_error = "Owned account must be provided as a collection of text values."
+
+   
+    if user_owned_account_identifiers is None:
+        user_owned_account_identifiers = []
+
+    else:
+        if user_owned_account_identifiers is not isinstance(list,tuple,set):
+            raise TypeError(invalid_owned_account_error) 
+
+    owned_account_values = user_owned_account_identifiers 
+
+    default_personal_transfer_identifiers = {
+                "zel to",
+                "zel from",
+                "zelle to",
+                "zelle from",
+                "venmo",
+                "cash app",
+                "cash app payment"
+            } 
+        
+    default_unclassified_transfer_identifiers = {
+                "transfer",
+                "transfer funds",
+                "ach transfer"
+            }
+
+    transfer_rule_sources = {
+        "Personal transfer identifiers": default_personal_transfer_identifiers,
+        "Unclassified transfer identifiers": default_unclassified_transfer_identifiers,
+        "owned account transfer": owned_account_values
+    }
+
+    transfer_rule_map = {}
+
+    for transfer_subtype, identifiers in transfer_rule_sources.items():
+
+        normalized_identifiers = []
+        seen_identifiers = set()
+
+        for identifier in identifiers:
+
+            if not isinstance(identifier,str):
+                raise TypeError(invalid_owned_account_error)
+
+            normalized_identifier = identifier.strip().lower()
+
+            if normalized_identifier.empty:
+                continue
+
+            if normalized_identifier in seen_identifiers:
+                continue
+
+            normalized_identifiers.append(normalized_identifier)
+            seen_identifiers.add(normalized_identifier)
+
+        transfer_rule_map[transfer_subtype] = normalized_identifiers
+
+    return transfer_rule_map    
 def classify_transactions(xlsx_file,description_column_name,amount_values):
 
     invalid_amount_error = (
@@ -348,9 +414,162 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
     ] = expense_transaction_type
 
     return transaction_types
+def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
-def categorize_transactions(xlsx_file,description_column_name,transaction_types):
-    pass
+    missing_description_column_error = "The transaction description column could not be found."
+    misaligned_transaction_types_error = "Transaction types do not align with the statement transactions."
+    misaligned_transfer_subtypes_error = "Transfer subtypes do not align with the statement transactions."
+    invalid_category_rule_map_error = "Category rule map must be provided as a dictionary."
+    incomplete_category_rule_map_error = "Category rule map must contain both Income and Expense rules."
+    invalid_transaction_type_error = "Unable to categorize transaction because its transaction type is invalid."
+    invalid_transfer_subtype_error = "Unable to categorize transaction because its transfer subtype is invalid."
+
+    expense_categories = [
+        "housing_category",
+        "utilities_category",
+        "healthcare_category",
+        "transportation_category",
+        "groceries_category",
+        "dining_category",
+        "entertainment_category",
+        "shopping_category"
+]
+
+    income_categories = [
+        "employment_income_category",
+        "refund_reimbursement_category"
+    ]
+
+    user_identifier_key = "user identifiers"
+    default_identifier_key = "default identifiers"
+    user_identifier = 2
+    default_identifier = 1
+    incoming_transfers_category = "Incoming Transfers"
+    outgoing_transfers_category = "Outgoing Transfers"
+
+
+    if description_column_name not in xlsx_file.columns:
+        raise ValueError( missing_description_column_error)
+
+    if transaction_types.index.equals(xlsx_file.index):
+        raise ValueError( missing_description_column_error)
+
+    if transfer_subtypes.index.equals(xlsx_file.index):
+        raise ValueError(misaligned_transfer_subtypes_error)
+
+    if not isinstance(category_rule_map,dict):
+        raise TypeError(invalid_category_rule_map_error)
+
+    if (income_transaction_type not in category_rule_map or expense_transaction_type not in category_rule_map):
+        raise ValueError(incomplete_category_rule_map_error)
+
+    if not transaction_types.index.equals(xlsx_file.index):
+        raise ValueError(misaligned_transaction_types_error)
+
+    if not transfer_subtypes.index.equals(xlsx_file.index):
+        raise ValueError(misaligned_transfer_subtypes_error)
+
+    normalized_descriptions = xlsx_file[description_column_name]
+    normalized_descriptions = normalized_descriptions.fillna("").astype(str).str.strip().str.lower()
+
+    transaction_categories = pd.Series(pd.NA,index=xlsx_file.index, dtype = "object")
+
+    for transaction_index in xlsx_file.index:
+
+        transaction_type = transaction_types.loc[transaction_index]
+        transfer_subtype = transfer_subtypes.loc[transaction_index]
+        normalized_description = normalized_descriptions.loc[transaction_index]
+
+        if transaction_type not in (income_transaction_type, expense_transaction_type, zero_amount_transaction_type):
+            raise ValueError(invalid_transaction_type_error)
+        
+        if transfer_subtype not in (personal_transfer, owned_account_transfer, unclassified_transfer,not_a_transfer):
+            raise ValueError(invalid_transfer_subtype_error) 
+
+
+        if transaction_type == zero_amount_transaction_type:
+            continue
+
+        if transfer_subtype == owned_account_transfer:
+            continue
+
+        if transfer_subtype in (personal_transfer, unclassified_transfer):
+
+             if transaction_type == income_transaction_type:
+                transaction_categories.loc[
+                    transaction_index
+                    ] = incoming_transfers_category
+
+        elif transaction_type == expense_transaction_type:
+                transaction_categories.loc[
+                transaction_index
+            ] = outgoing_transfers_category 
+
+                continue 
+
+        if transaction_type == income_transaction_type:
+
+                applicable_category_rules = category_rule_map[income_transaction_type]
+
+                category_priority = income_categories
+                fallback_category = other_income_category 
+
+        else: 
+            applicable_category_rules = category_rule_map[expense_transaction_type]
+
+            category_priority = expense_categories
+            fallback_category = other_expense_category
+
+        if normalized_description == "":
+                transaction_categories.loc[
+                transaction_index
+            ] = fallback_category
+
+        selected_category = pd.NA
+        best_source_priority = 0
+        best_identifier_length = 0
+
+        for category_name in category_priority:
+
+            category_rules =  applicable_category_rules[category_name] 
+
+            for identifier_source in (user_identifier_key, default_identifier_key):
+
+                if identifier_source == user_identifier_key:
+                    source_priority = user_identifier
+
+                else:
+                    source_priority = default_identifier
+
+                identifiers = category_rules[identifier_source]
+
+                for identifier in identifiers:
+
+                    if  identifier in normalized_description:
+
+                        identifier_length = len(identifier)
+
+                        if source_priority > best_source_priority:
+                            selected_category = category_name
+                            best_source_priority = source_priority
+                            best_identifier_length = identifier_length
+
+                        elif (source_priority == best_source_priority and identifier_length > best_identifier_length):
+                            selected_category = category_name
+                            best_identifier_length = identifier_length
+
+            if pd.notna(selected_category):
+
+                transaction_categories.loc[
+                    transaction_index
+                ] = selected_category
+
+            else:
+                transaction_categories.loc[
+                transaction_index
+            ] = fallback_category
+
+    return transaction_categories              
 # ============================================================
 # FINANCIAL CALCULATION FUNCTIONS
 # ============================================================
@@ -534,12 +753,7 @@ def calculate_monthly_summary(
         income_transaction_counts,
         expense_transaction_counts
     )
-def calculate_monthly_transfer_summary(
-    xlsx_file,
-    date_column_name,
-    amount_values,
-    transaction_types
-):
+def calculate_monthly_transfer_summary(xlsx_file,date_column_name,amount_values,transaction_types,category_rule_map):
     pass
 
 def calculate_expense_category_summary(
@@ -572,27 +786,6 @@ def generate_financial_insights(
 
 def validate_financial_insights(
     financial_insights
-):
-    pass
-# ============================================================
-# AI CHATBOT FUNCTIONS
-# ============================================================
-def build_financial_chatbot_context(
-    financial_summary,
-    monthly_summary,
-    transfer_summary,
-    financial_insights
-):
-    pass
-
-def generate_financial_chatbot_response(
-    user_question,
-    chatbot_context
-):
-    pass
-
-def run_financial_chatbot(
-    chatbot_context
 ):
     pass
 # ============================================================
