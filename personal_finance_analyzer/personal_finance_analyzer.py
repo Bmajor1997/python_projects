@@ -79,7 +79,20 @@ owned_account_transfer = "Owned-Account Transfer"
 unclassified_transfer = "Unclassified Transfer"
 other_income_category = "Other Income"
 other_expense_category = "Other Expense"
+income_transaction_type = "Income"
+expense_transaction_type = "Expense"
+zero_amount_transaction_type = "Zero Amount"
 
+housing_category = "Housing"
+utilities_category = "Utilities"
+healthcare_category = "Healthcare"
+transportation_category = "Transportation"
+groceries_category = "Groceries"
+dining_category = "Dining"
+entertainment_category = "Entertainment"
+shopping_category = "Shopping"
+employment_income_category = "Employment Income"
+refund_reimbursement_category = "Refund or Reimbursement"
 # ============================================================
 # DISPLAY FUNCTIONS
 # ============================================================
@@ -416,6 +429,7 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
     return transaction_types
 def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
+
     missing_description_column_error = "The transaction description column could not be found."
     misaligned_transaction_types_error = "Transaction types do not align with the statement transactions."
     misaligned_transfer_subtypes_error = "Transfer subtypes do not align with the statement transactions."
@@ -425,19 +439,19 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
     invalid_transfer_subtype_error = "Unable to categorize transaction because its transfer subtype is invalid."
 
     expense_categories = [
-        "housing_category",
-        "utilities_category",
-        "healthcare_category",
-        "transportation_category",
-        "groceries_category",
-        "dining_category",
-        "entertainment_category",
-        "shopping_category"
-]
+        housing_category,
+        utilities_category,
+        healthcare_category,
+        transportation_category,
+        groceries_category,
+        dining_category,
+        entertainment_category,
+        shopping_category
+    ]
 
     income_categories = [
-        "employment_income_category",
-        "refund_reimbursement_category"
+       employment_income_category,
+        refund_reimbursement_category
     ]
 
     user_identifier_key = "user identifiers"
@@ -451,10 +465,10 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
     if description_column_name not in xlsx_file.columns:
         raise ValueError( missing_description_column_error)
 
-    if transaction_types.index.equals(xlsx_file.index):
-        raise ValueError( missing_description_column_error)
+    if not transaction_types.index.equals(xlsx_file.index):
+        raise ValueError(misaligned_transaction_types_error)
 
-    if transfer_subtypes.index.equals(xlsx_file.index):
+    if not transfer_subtypes.index.equals(xlsx_file.index):
         raise ValueError(misaligned_transfer_subtypes_error)
 
     if not isinstance(category_rule_map,dict):
@@ -462,12 +476,6 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
 
     if (income_transaction_type not in category_rule_map or expense_transaction_type not in category_rule_map):
         raise ValueError(incomplete_category_rule_map_error)
-
-    if not transaction_types.index.equals(xlsx_file.index):
-        raise ValueError(misaligned_transaction_types_error)
-
-    if not transfer_subtypes.index.equals(xlsx_file.index):
-        raise ValueError(misaligned_transfer_subtypes_error)
 
     normalized_descriptions = xlsx_file[description_column_name]
     normalized_descriptions = normalized_descriptions.fillna("").astype(str).str.strip().str.lower()
@@ -500,12 +508,12 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
                     transaction_index
                     ] = incoming_transfers_category
 
-        elif transaction_type == expense_transaction_type:
-                transaction_categories.loc[
-                transaction_index
-            ] = outgoing_transfers_category 
+             elif transaction_type == expense_transaction_type:
+                    transaction_categories.loc[
+                    transaction_index
+                ] = outgoing_transfers_category 
 
-                continue 
+             continue 
 
         if transaction_type == income_transaction_type:
 
@@ -525,13 +533,17 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
                 transaction_index
             ] = fallback_category
 
+                continue 
+
         selected_category = pd.NA
         best_source_priority = 0
         best_identifier_length = 0
 
         for category_name in category_priority:
 
-            category_rules =  applicable_category_rules[category_name] 
+            category_rules = applicable_category_rules[
+                category_name
+            ]
 
             for identifier_source in (user_identifier_key, default_identifier_key):
 
@@ -558,18 +570,20 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
                             selected_category = category_name
                             best_identifier_length = identifier_length
 
-            if pd.notna(selected_category):
+        if pd.notna(selected_category):
 
-                transaction_categories.loc[
-                    transaction_index
-                ] = selected_category
-
-            else:
-                transaction_categories.loc[
+            transaction_categories.loc[
                 transaction_index
-            ] = fallback_category
+            ] = selected_category
 
-    return transaction_categories              
+        else:
+            transaction_categories.loc[
+            transaction_index
+        ] = fallback_category
+
+    return transaction_categories        
+ def create_category_rule_map(user_category_identifiers):
+    pass     
 # ============================================================
 # FINANCIAL CALCULATION FUNCTIONS
 # ============================================================
@@ -777,7 +791,6 @@ def prepare_financial_insight_data(
     transfer_summary
 ):
     pass
-
 
 def generate_financial_insights(
     financial_insight_data
