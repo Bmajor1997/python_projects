@@ -140,7 +140,6 @@ def validate_xlsx_file(selected_file):
     return xlsx_path
 def validate_xlsx_files(selected_files):
     pass
-
 def open_xlsx(xlsx_path):
 
     try:
@@ -150,7 +149,6 @@ def open_xlsx(xlsx_path):
         return None
 
     return xlsx_file
-
 def open_xlsx_files(xlsx_paths):
     pass
 # ============================================================
@@ -277,24 +275,14 @@ def identify_description_column(xlsx_file):
 # ============================================================
 def standardize_statement_columns(xlsx_file):
     pass
-
-
 def combine_statements(standardized_statements):
     pass
-
-
 def remove_duplicate_transactions(combined_transactions):
     pass
-
-
 def sort_transactions_by_date(combined_transactions):
     pass
-
-
 def filter_complete_months(combined_transactions):
     pass
-
-
 def prepare_combined_statement_data(xlsx_files):
     pass
 # ============================================================
@@ -365,6 +353,7 @@ def create_transfer_rule_map(user_owned_account_identifiers):
     return transfer_rule_map    
 def classify_transactions(xlsx_file,description_column_name,amount_values):
 
+
     invalid_amount_error = (
         "Unable to classify transactions because one or more "
         "amounts are missing or invalid."
@@ -427,8 +416,272 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
     ] = expense_transaction_type
 
     return transaction_types
-def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
+def create_category_rule_map(user_category_identifiers):
 
+    invalid_user_category_error = "User category identifiers must be provided as a dictionary."
+    invalid_category_key_error = "Category section and category names must be text value."
+    invalid_category_section_name_error = "User category identifiers contain an unsupported category."
+    invalid__category_section_error = "Each category section must be provided as a dictionary."
+    invalid_category_name_error = "User category identifiers contain an unsupported category."
+    invalid_category_identifiers_error = "Category identifiers must be provided as a collection of text values."
+    invalid_category_identifier_error = "Each category identifier must be a text value."
+
+    user_identifier_key = "user identifiers"
+    default_identifier_key = "default identifiers"
+
+
+    default_category_identifiers = {
+        income_transaction_type: {
+            employment_income_category: [
+                "payroll", "salary", "wages", "payroll deposit",
+                "employer deposit", "adp payroll", "paychex"
+            ],
+            refund_reimbursement_category: [
+                "refund", "reimbursement", "purchase return", "return credit",
+                "merchant refund", "payment reversal", "cashback reward"
+            ]
+        },
+        expense_transaction_type: {
+            housing_category: [
+                "rent payment", "mortgage payment", "property management",
+                "homeowners association"
+            ],
+            utilities_category: [
+                "electric bill", "water bill", "natural gas",
+                "internet service", "cable service", "phone bill",
+                "utility payment"
+            ],
+            healthcare_category: [
+                "pharmacy", "medical center", "hospital", "urgent care",
+                "dental", "dentist", "optometry", "vision care",
+                "health insurance", "medical clinic"
+            ],
+            transportation_category: [
+                "gas station", "fuel", "parking", "toll", "public transit",
+                "rideshare", "uber", "lyft", "auto repair",
+                "vehicle maintenance", "car insurance"
+            ],
+            groceries_category: [
+                "grocery", "supermarket", "instacart", "kroger",
+                "publix", "aldi", "whole foods", "trader joe"
+            ],
+            dining_category: [
+                "restaurant", "cafe", "coffee shop", "fast food",
+                "doordash", "uber eats", "grubhub", "food delivery"
+            ],
+            entertainment_category: [
+                "movie theater", "cinema", "streaming service", "concert",
+                "ticketmaster", "gaming", "amusement park", "netflix",
+                "spotify"
+            ],
+            shopping_category: [
+                "amazon", "walmart", "target", "ebay", "etsy",
+                "department store", "clothing", "electronics",
+                "online purchase"
+            ]
+        }
+    } 
+
+    valid_section_names =  {
+        "income" : income_transaction_type,
+        "expense": expense_transaction_type
+    }
+
+    valid_categories_by_section = {
+        income_transaction_type: [
+        employment_income_category,
+        refund_reimbursement_category
+    ],
+    expense_transaction_type: [
+        housing_category, utilities_category, healthcare_category,
+        transportation_category, groceries_category,dining_category,
+        entertainment_category,shopping_category
+    ]
+    }
+
+    if user_category_identifiers is None:
+        user_category_identifiers = {}
+
+    elif not isinstance(user_category_identifiers,dict):
+        raise TypeError(invalid_user_category_error)
+
+    normalized_user_identifiers = {}
+
+    for canonical_section_name, category_section in (default_category_identifiers.items()):
+        normalized_user_identifiers[
+            canonical_section_name
+        ] = {}
+
+        for canonical_category_name in category_section:
+            normalized_user_identifiers[
+                canonical_section_name
+            ][
+                canonical_category_name
+            ] = []
+
+    for section_name, category_section in (
+    user_category_identifiers.items()
+):
+     if not isinstance(section_name, str):
+        raise TypeError(invalid_category_key_error)
+
+    normalized_section_name = (
+        section_name
+        .strip()
+        .lower()
+    )
+
+    if normalized_section_name not in valid_section_names:
+        raise ValueError(
+            invalid_category_section_name_error
+        )
+
+    canonical_section_name = valid_section_names[
+        normalized_section_name
+    ]
+
+    if not isinstance(category_section, dict):
+        raise TypeError(
+            invalid__category_section_error
+        )
+
+    for category_name, identifier_collection in (
+        category_section.items()
+    ):
+        if not isinstance(category_name, str):
+            raise TypeError(
+                invalid_category_key_error
+            )
+
+        normalized_category_name = (
+            category_name
+            .strip()
+            .lower()
+        )
+
+        canonical_category_name = None
+
+        for approved_category_name in (
+            valid_categories_by_section[
+                canonical_section_name
+            ]
+        ):
+            normalized_approved_category_name = (
+                approved_category_name.lower()
+            )
+
+            if (
+                normalized_category_name
+                == normalized_approved_category_name
+            ):
+                canonical_category_name = (
+                    approved_category_name
+                )
+
+                break
+
+        if canonical_category_name is None:
+            raise ValueError(
+                invalid_category_name_error
+            )
+
+        if not isinstance(
+            identifier_collection,
+            (list, tuple, set)
+        ):
+            raise TypeError(
+                invalid_category_identifiers_error
+            )
+
+        normalized_identifiers = (
+            normalized_user_identifiers[
+                canonical_section_name
+            ][
+                canonical_category_name
+            ]
+        )
+
+        seen_identifiers = set(
+            normalized_identifiers
+        )
+
+        for identifier in identifier_collection:
+            if not isinstance(identifier, str):
+                raise TypeError(
+                    invalid_category_identifier_error
+                )
+
+            normalized_identifier = (
+                identifier
+                .strip()
+                .lower()
+            )
+
+            if normalized_identifier == "":
+                continue
+
+            if normalized_identifier in seen_identifiers:
+                continue
+
+            normalized_identifiers.append(
+                normalized_identifier
+            )
+
+            seen_identifiers.add(
+                normalized_identifier
+            )
+
+    for canonical_section_name in normalized_user_identifiers:
+        current_normalized_user_section = (
+            normalized_user_identifiers[
+                canonical_section_name
+            ]
+        )
+
+        for canonical_category_name in (
+            current_normalized_user_section
+        ):
+            current_normalized_user_section[
+                canonical_category_name
+            ].sort()
+
+    category_rule_map = {}
+
+    for (
+        canonical_section_name,
+        default_category_section
+    ) in default_category_identifiers.items():
+
+        category_rule_map[
+            canonical_section_name
+        ] = {}
+
+        for (
+            canonical_category_name,
+            default_identifiers
+        ) in default_category_section.items():
+
+            user_identifiers = normalized_user_identifiers[
+                canonical_section_name
+            ][
+                canonical_category_name
+            ]
+
+            category_rule_map[
+                canonical_section_name
+            ][
+                canonical_category_name
+            ] = {
+                user_identifier_key: list(
+                    user_identifiers
+                ),
+                default_identifier_key: list(
+                    default_identifiers
+                )
+            }
+
+    return category_rule_map
+def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
     missing_description_column_error = "The transaction description column could not be found."
     misaligned_transaction_types_error = "Transaction types do not align with the statement transactions."
@@ -582,8 +835,109 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
         ] = fallback_category
 
     return transaction_categories        
- def create_category_rule_map(user_category_identifiers):
-    pass     
+def calculate_category_totals(amount_values,transaction_types,transaction_categories):
+    
+    invalid_amount_values_type_error = "Amount values must be provided as a pandas Series."
+    invalid_transaction_types_error = "Transaction types must be provided as a pandas Series."
+    invalid_transaction_categories_error = "Transaction categories must be provided as a pandas Series."
+    misaligned_transaction_types_error = "Transaction types do not align with the transaction amounts."
+    misaligned_transaction_categories_error = "Transaction categories do not align with the transaction amounts." 
+    invalid_amount_values_error = "Unable to calculate category totals because one or more amounts are missing or invalid."
+    invalid_transaction_type_error = "Unable to calculate category totals because a transaction type is invalid."
+    amount_type_mismatch_error =  "A transaction amount does not match its transaction type."
+    invalid_transaction_category_error = "A transaction category does not match its transaction type."
+
+    income_categories = [
+        employment_income_category,
+        refund_reimbursement_category,
+        incoming_transfers_category,
+        other_income_category
+    ]
+
+    expense_categories = [
+        housing_category,
+        utilities_category,
+        healthcare_category,
+        transportation_category,
+        groceries_category,
+        dining_category,
+        entertainment_category,
+        shopping_category
+        ]
+
+    if not isinstance(amount_values,pd.Series):
+        raise TypeError(invalid_amount_values_type_error)
+
+    if not isinstance(transaction_types,pd.Series):
+        raise TypeError(invalid_transaction_types_error)
+
+    if not isinstance(transaction_categories,pd.Series):
+        raise TypeError(invalid_transaction_categories_error)
+
+    if transaction_types.Series.index.equals(amount_values.index):
+        raise ValueError(misaligned_transaction_types_error)
+
+    if transaction_categories.Series.index.equals(amount_values.index):
+        raise ValueError(misaligned_transaction_categories_error)
+
+    if amount_values.isna().any():
+        raise ValueError(invalid_amount_values_error)
+
+    if not pd.api.types.is_numeric_dtype(amount_values):
+        raise ValueError(invalid_amount_values_error) 
+
+    if amount_values == None:
+        income_category_totals = pd.Series(dtype = "float")
+        expense_category_totals = pd.Series(dtype = "float")
+        return income_category_totals,expense_category_totals
+
+    for transaction_index in amount_values.index():
+
+        transaction_amount = amount_values[transaction_index]
+        transaction_type = transaction_types[transaction_index]
+
+        transaction_category = transaction_categories[transaction_index]
+
+        if not transaction_type not in (income_transaction_type,expense_transaction_type,zero_amount_transaction_type):
+            raise ValueError( invalid_transaction_type_error)
+
+        if transaction_type is income_transaction_type:
+
+            if transaction_amount < 0:
+                raise ValueError(amount_type_mismatch_error)
+
+            if transaction_category == None:
+                continue
+
+            if transaction_category not in income_transaction_type:
+                raise ValueError (invalid_transaction_category_error)
+
+            elif transaction_type in expense_transaction_type:
+
+                if transaction_amount > 0:
+                    raise ValueError(amount_type_mismatch_error)
+
+                if transaction_category == None:
+                    continue
+
+                if not transaction_category in expense_categories:
+                    raise ValueError(invalid_transaction_category_error)
+
+            else:
+
+                if not transaction_amount == 0:
+                    raise ValueError(amount_type_mismatch_error)
+
+                if not transaction_category == None:
+                    raise ValueError(invalid_transaction_category_error)
+
+            category_data = pd.DataFrame(amount = amount_values,transaction_type = transaction_types,transaction_category = transaction_categories)
+
+            
+
+    
+def create_expense_category_pie_chart():
+    pass
 # ============================================================
 # FINANCIAL CALCULATION FUNCTIONS
 # ============================================================
