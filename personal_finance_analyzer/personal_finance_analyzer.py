@@ -93,6 +93,8 @@ entertainment_category = "Entertainment"
 shopping_category = "Shopping"
 employment_income_category = "Employment Income"
 refund_reimbursement_category = "Refund or Reimbursement"
+incoming_transfers_category = "Incoming Transfers"
+outgoing_transfers_category = "Outgoing Transfers"
 # ============================================================
 # DISPLAY FUNCTIONS
 # ============================================================
@@ -862,7 +864,9 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
         groceries_category,
         dining_category,
         entertainment_category,
-        shopping_category
+        shopping_category,
+        outgoing_transfers_category,
+        other_expense_category
         ]
 
     if not isinstance(amount_values,pd.Series):
@@ -874,10 +878,10 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
     if not isinstance(transaction_categories,pd.Series):
         raise TypeError(invalid_transaction_categories_error)
 
-    if transaction_types.Series.index.equals(amount_values.index):
+    if not transaction_types.index.equals(amount_values.index):
         raise ValueError(misaligned_transaction_types_error)
 
-    if transaction_categories.Series.index.equals(amount_values.index):
+    if not transaction_categories.index.equals(amount_values.index):
         raise ValueError(misaligned_transaction_categories_error)
 
     if amount_values.isna().any():
@@ -886,57 +890,79 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
     if not pd.api.types.is_numeric_dtype(amount_values):
         raise ValueError(invalid_amount_values_error) 
 
-    if amount_values == None:
+    if amount_values.empty:
         income_category_totals = pd.Series(dtype = "float")
         expense_category_totals = pd.Series(dtype = "float")
         return income_category_totals,expense_category_totals
 
-    for transaction_index in amount_values.index():
+    for transaction_index in amount_values.index:
 
-        transaction_amount = amount_values[transaction_index]
-        transaction_type = transaction_types[transaction_index]
+        transaction_amount = amount_values.loc[transaction_index]
+        transaction_type = transaction_types.loc[transaction_index]
 
-        transaction_category = transaction_categories[transaction_index]
+        transaction_category = transaction_categories.loc[transaction_index]
 
-        if not transaction_type not in (income_transaction_type,expense_transaction_type,zero_amount_transaction_type):
+        if transaction_type not in (income_transaction_type,expense_transaction_type,zero_amount_transaction_type):
             raise ValueError( invalid_transaction_type_error)
 
-        if transaction_type is income_transaction_type:
+        if transaction_type == income_transaction_type:
 
-            if transaction_amount < 0:
+            if transaction_amount <= 0:
                 raise ValueError(amount_type_mismatch_error)
 
-            if transaction_category == None:
+            if pd.isna(transaction_category):
                 continue
 
-            if transaction_category not in income_transaction_type:
+            if transaction_category not in income_categories:
                 raise ValueError (invalid_transaction_category_error)
 
-            elif transaction_type in expense_transaction_type:
+        elif transaction_type == expense_transaction_type:
 
-                if transaction_amount > 0:
-                    raise ValueError(amount_type_mismatch_error)
+            if transaction_amount >= 0:
+                raise ValueError(amount_type_mismatch_error)
 
-                if transaction_category == None:
-                    continue
+            if pd.isna(transaction_category):
+                continue
 
-                if not transaction_category in expense_categories:
-                    raise ValueError(invalid_transaction_category_error)
+            if transaction_category not in expense_categories:
+                raise ValueError(invalid_transaction_category_error)
 
-            else:
+        else:
 
-                if not transaction_amount == 0:
-                    raise ValueError(amount_type_mismatch_error)
+            if transaction_amount != 0:
+                raise ValueError(amount_type_mismatch_error)
 
-                if not transaction_category == None:
-                    raise ValueError(invalid_transaction_category_error)
+            if  pd.notna(transaction_category):
+                raise ValueError(invalid_transaction_category_error)
 
-            category_data = pd.DataFrame(amount = amount_values,transaction_type = transaction_types,transaction_category = transaction_categories)
+    category_data = pd.DataFrame({"amount":amount_values,"transaction_type": transaction_types,"transaction_category": transaction_categories})
 
-            
+    categorized_data = category_data.dropna(subset=["transaction_category"])
 
-    
-def create_expense_category_pie_chart():
+    income_data = categorized_data[categorized_data["transaction_type"] == income_transaction_type]
+
+    income_category_totals = income_data.groupby("transaction_category")["amount"].sum()
+
+    income_category_totals = income_category_totals.reindex(income_categories, fill_value=0)
+
+    income_category_totals = income_category_totals[income_category_totals != 0]
+
+    income_category_totals = income_category_totals.astype(float)
+
+    expense_data = categorized_data[categorized_data["transaction_type"] == expense_transaction_type]
+
+    expense_category_totals = expense_data.groupby("transaction_category")["amount"].sum()
+
+    expense_category_totals = expense_category_totals.abs()
+
+    expense_category_totals = expense_category_totals.reindex(expense_categories, fill_value=0)
+
+    expense_category_totals = expense_category_totals[expense_category_totals != 0]
+
+    expense_category_totals = expense_category_totals.astype(float)
+
+    return income_category_totals, expense_category_totals  
+def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
     pass
 # ============================================================
 # FINANCIAL CALCULATION FUNCTIONS
@@ -1122,19 +1148,6 @@ def calculate_monthly_summary(
         expense_transaction_counts
     )
 def calculate_monthly_transfer_summary(xlsx_file,date_column_name,amount_values,transaction_types,category_rule_map):
-    pass
-
-def calculate_expense_category_summary(
-    amount_values,
-    transaction_types,
-    transaction_categories
-):
-    pass
-def calculate_income_category_summary(
-    amount_values,
-    transaction_types,
-    transaction_categories
-):
     pass
 # ============================================================
 # AI FINANCIAL INSIGHT FUNCTIONS
