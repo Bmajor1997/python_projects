@@ -973,8 +973,6 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
 
     return income_category_totals, expense_category_totals  
 
-def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
-    pass
 # ============================================================
 # FINANCIAL CALCULATION FUNCTIONS
 # ============================================================
@@ -1554,6 +1552,9 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 )
 
     income_axis.add_patch(card)  
+
+def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
+    pass
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
 # ============================================================
@@ -1680,6 +1681,7 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
     transaction_axis.add_patch(card)
 
     return None
+
 # ============================================================
 # TRANSFER CHART FUNCTIONS
 # ============================================================
