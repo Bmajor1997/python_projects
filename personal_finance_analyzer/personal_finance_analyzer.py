@@ -3,6 +3,7 @@
 # IMPORTS
 # ============================================================
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, PathPatch
 from pathlib import Path
@@ -1554,7 +1555,67 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     income_axis.add_patch(card)  
 
 def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
-    pass
+
+    invalid_category_totals_error = "Category totals must be provided as a pandas Series."
+    invalid_chart_title_error = "Chart title must be provided as nonempty text."
+    invalid_category_total_values_error = "Category totals must contain valid nonnegative numeric values."
+    invalid_expense_category_error = "Expense category totals contain an unsupported category."
+    duplicate_expense_category_error = "Expense category totals contain duplicate category labels."
+
+    empty_chart_message = "No categorized expenses available."
+    center_label_txt = "TOTAL SPENDING"
+    minimum_visible_percentage = 3
+    donut_start_angle = 90
+    donut_ring_width = 0.38
+    donut_center_x = -0.2
+
+    approved_expense_categories = {
+        housing_category,
+        utilities_category,
+        healthcare_category,
+        transportation_category,
+        groceries_category,
+        dining_category,
+        entertainment_category,
+        shopping_category,
+        outgoing_transfers_category,
+        other_expense_category
+    }
+
+    expense_category_color_map = {
+        housing_category: "#1F4E79",
+        utilities_category: "#B35C00",
+        healthcare_category: "#8B1E3F",
+        transportation_category: "#006D77",
+        groceries_category: "#2E6B3A",
+        dining_category: "#8A6D00",
+        entertainment_category: "#5B3F8C",
+        shopping_category: "#8C3A5B",
+        other_expense_category: "#4A4A4A"
+    }
+
+    if not isinstance(category_totals, pd.Series):
+        raise TypeError(invalid_category_totals_error)
+
+    if not isinstance(chart_title,str):
+        raise TypeError(invalid_chart_title_error)
+
+    cleaned_chart_title = chart_title.strip()
+
+    if cleaned_chart_title.empty:
+        raise ValueError(invalid_category_total_values_error)
+
+    if not category_totals.is_numeric_dtype():
+        raise ValueError( invalid_category_total_values_error)
+
+    if category_totals.isna().any():
+        raise ValueError(invalid_category_total_values_error)
+
+    if category_totals.any() < 0:
+        raise ValueError(invalid_category_total_values_error)
+
+    
+
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
 # ============================================================
