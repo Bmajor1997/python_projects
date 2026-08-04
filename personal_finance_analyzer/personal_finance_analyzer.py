@@ -126,6 +126,7 @@ def select_xlsx_file():
         return None
 
     return selected_file
+
 def validate_xlsx_file(selected_file):
     
     xlsx_path = Path(selected_file)
@@ -140,6 +141,7 @@ def validate_xlsx_file(selected_file):
         raise Exception(empty_file_error)
 
     return xlsx_path
+
 def validate_xlsx_files(selected_files):
     pass
 def open_xlsx(xlsx_path):
@@ -151,6 +153,7 @@ def open_xlsx(xlsx_path):
         return None
 
     return xlsx_file
+
 def open_xlsx_files(xlsx_paths):
     pass
 # ============================================================
@@ -195,6 +198,7 @@ def identify_date_column(xlsx_file):
     date_column_name = xlsx_file.columns[column_position]
 
     return date_column_name
+
 def determine_date_range(xlsx_file,date_column_name ):
 
     # Create error message
@@ -217,6 +221,7 @@ def determine_date_range(xlsx_file,date_column_name ):
     end_date = date_values.max()
 
     return start_date, end_date
+
 def identify_amount_column(xlsx_file):
 
     possible_amount_column_names = [
@@ -246,6 +251,7 @@ def identify_amount_column(xlsx_file):
     amount_column_name = xlsx_file.columns[column_position]
 
     return amount_column_name
+
 def identify_description_column(xlsx_file):
 
      description_column_name = [
@@ -353,6 +359,7 @@ def create_transfer_rule_map(user_owned_account_identifiers):
         transfer_rule_map[transfer_subtype] = normalized_identifiers
 
     return transfer_rule_map    
+
 def classify_transactions(xlsx_file,description_column_name,amount_values):
 
 
@@ -418,6 +425,7 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
     ] = expense_transaction_type
 
     return transaction_types
+
 def create_category_rule_map(user_category_identifiers):
 
     invalid_user_category_error = "User category identifiers must be provided as a dictionary."
@@ -683,6 +691,7 @@ def create_category_rule_map(user_category_identifiers):
             }
 
     return category_rule_map
+
 def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
     missing_description_column_error = "The transaction description column could not be found."
@@ -837,6 +846,7 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
         ] = fallback_category
 
     return transaction_categories        
+
 def calculate_category_totals(amount_values,transaction_types,transaction_categories):
     
     invalid_amount_values_type_error = "Amount values must be provided as a pandas Series."
@@ -962,6 +972,7 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
     expense_category_totals = expense_category_totals.astype(float)
 
     return income_category_totals, expense_category_totals  
+
 def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
     pass
 # ============================================================
@@ -972,6 +983,7 @@ def count_transactions(xlsx_file):
     transaction_count = len(xlsx_file)
 
     return transaction_count
+
 def calculate_financial_summary(xlsx_file,description_column_name):
 
     transaction_count = count_transactions(xlsx_file)
@@ -1014,6 +1026,7 @@ def calculate_financial_summary(xlsx_file,description_column_name):
         amount_values,
         transaction_types
     )
+
 def calculate_monthly_summary(
     xlsx_file,
     date_column_name,
@@ -1147,6 +1160,7 @@ def calculate_monthly_summary(
         income_transaction_counts,
         expense_transaction_counts
     )
+
 def calculate_monthly_transfer_summary(xlsx_file,date_column_name,amount_values,transaction_types,category_rule_map):
     pass
 # ============================================================
@@ -1230,6 +1244,7 @@ def determine_financial_health(total_income, total_expenses):
         financial_health =at_risk_status 
 
     return financial_health, savings_rate
+
 def get_financial_health_colors(financial_health):
 
     health_color_map = {
@@ -1254,6 +1269,7 @@ def get_financial_health_colors(financial_health):
     ) = selected_colors
 
     return status_forground_color, status_background_color   
+
 def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
     financial_health_title = "Financial Health"
@@ -1482,6 +1498,7 @@ def create_monthly_income_expenses_chart(
     ncol=1,fontsize=11,frameon=False, columnspacing = 5)
     
     return income_bars, expense_bars
+
 def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     current_ylim, current_ymax = income_axis.get_ylim()
@@ -1584,6 +1601,7 @@ def create_monthly_income_expense_transaction_chart(transaction_axis,months,inco
         ncol=1,fontsize=11,frameon=False, columnspacing = 5)
 
     return income_transaction_bars, expense_transaction_bars
+
 def style_monthly_income_expense_transaction_chart(transaction_axis,income_transaction_bars,
     expense_transaction_bars):
 
@@ -2034,6 +2052,7 @@ def save_financial_report(report_figure):
             )
 
     return
+
 def export_financial_data(
     combined_transactions,
     financial_summary,
