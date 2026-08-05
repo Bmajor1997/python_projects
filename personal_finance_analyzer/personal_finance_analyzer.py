@@ -1602,19 +1602,124 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
 
     cleaned_chart_title = chart_title.strip()
 
-    if cleaned_chart_title.empty:
-        raise ValueError(invalid_category_total_values_error)
+    if cleaned_chart_title == "":
+        raise ValueError(invalid_chart_title_error)
 
-    if not category_totals.is_numeric_dtype():
+    if not pd.api.types.is_numeric_dtype(category_totals):
         raise ValueError( invalid_category_total_values_error)
 
     if category_totals.isna().any():
         raise ValueError(invalid_category_total_values_error)
 
-    if category_totals.any() < 0:
+    if (category_totals < 0).any() :
         raise ValueError(invalid_category_total_values_error)
 
-    
+    if category_totals.index.has_duplicates:
+        raise ValueError(duplicate_expense_category_error) 
+
+    for category_name in category_totals.index:
+
+        if pd.isna(category_name) or category_name not in approved_expense_categories:
+            raise ValueError(invalid_expense_category_error)
+
+    category_axis.axis("off")
+
+    category_axis.set_aspect("equal")
+
+    category_axis.set_title(cleaned_chart_title, loc='center', pad=15, fontsize=15, fontweight= "bold", color="black")
+
+    chart_totals = category_totals.copy()
+
+    if outgoing_transfers_category in chart_totals.index:
+        chart_totals = chart_totals.drop(index=outgoing_transfers_category)
+
+    chart_totals = chart_totals[chart_totals > 0]
+
+    if chart_totals.empty:
+        category_axis.text(
+            0.5,
+            0.5,
+            empty_chart_message,
+            transform=category_axis.transAxes,
+            ha="center",
+            va="center",
+            fontsize=11,
+            color="dimgray"
+        )
+
+        return [], []
+
+    total_spending = chart_totals.sum()
+    slice_colors = []
+
+    for category_name in chart_totals.index:
+
+        category_color = expense_category_color_map[category_name]
+        slice_colors.append(category_color)
+
+    def format_slice_label(percentage):
+
+        if percentage < minimum_visible_percentage:
+            return ""
+
+        slice_amount = (percentage / 100) * total_spending
+        return (f"{percentage:.1f}%\n" f"${slice_amount:,.0f}")
+
+    expense_wedges, _, slice_texts = category_axis.pie(
+    chart_totals.values,
+    colors=slice_colors,
+    startangle=donut_start_angle,
+    counterclock=False,
+    center=(donut_center_x, 0),
+    autopct=format_slice_label,
+    pctdistance=0.80,
+    wedgeprops={
+        "width": donut_ring_width,
+        "edgecolor": "white",
+        "linewidth": 1.5
+    },
+    textprops={
+        "color": "white",
+        "fontweight": "bold"
+    }
+    )
+
+    category_axis.text(
+    donut_center_x,
+    0.08,
+    center_label_txt,
+    ha="center",
+    va="center",
+    fontsize=9,
+    fontweight="normal",
+    color="darkgray"
+    )
+
+    category_axis.text(
+        donut_center_x,
+        -0.08,
+        f"${total_spending:,.2f}",
+        ha="center",
+        va="center",
+        fontsize=13,
+        fontweight="bold",
+        color="#1F4E79"
+    )
+
+    category_axis.legend(
+        expense_wedges,
+        chart_totals.index.tolist(),
+        loc="center left",
+        bbox_to_anchor=(0.88, 0.5),
+        ncol=1,
+        frameon=False,
+        fontsize=9
+    )
+
+    return expense_wedges, slice_texts
+
+def style_expense_category_pie_chart(category_axis):
+    pass       
 
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
@@ -1742,10 +1847,16 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
     transaction_axis.add_patch(card)
 
     return None
-
 # ============================================================
 # TRANSFER CHART FUNCTIONS
 # ============================================================
+def classify_transfer_subtypes(
+    xlsx_file,
+    description_column_name,
+    transfer_rule_map
+):
+    pass
+
 def create_monthly_transfer_chart(
     transfer_axis,
     months,
@@ -1894,7 +2005,8 @@ def create_financial_report(
     income_totals,
     expense_totals,
     income_transaction_counts,
-    expense_transaction_counts
+    expense_transaction_counts,
+    expense_category_totals
 ):
 
     financial_health, savings_rate = determine_financial_health(
@@ -1904,7 +2016,7 @@ def create_financial_report(
 
     # Create report
 
-    report_figure = plt.figure(figsize=(14, 8))
+    report_figure = plt.figure(figsize=(14, 11))
 
     formatted_start_date = start_date.strftime("%B %d, %Y")
     formatted_end_date = end_date.strftime("%B %d, %Y")
@@ -1930,9 +2042,9 @@ def create_financial_report(
     )
 
     report_layout = report_figure.add_gridspec(
-        4,
+        5,
         2,
-        height_ratios=[0.2, 1.0, 0.35, 1.6]
+        height_ratios=[0.2, 1.0, 0.35, 1.6, 1.8]
     )
 
     banner_axis = report_figure.add_subplot(
@@ -1953,6 +2065,10 @@ def create_financial_report(
 
     transaction_axis = report_figure.add_subplot(
         report_layout[3, 1]
+    )
+
+    category_axis = report_figure.add_subplot(
+        report_layout[4, :]
     )
 
     financial_summary.axis("off")
@@ -2023,6 +2139,7 @@ def create_financial_report(
         expense_transaction_counts
     )
 
+    
     style_monthly_income_expense_transaction_chart(
         transaction_axis,
         income_transaction_bars,
@@ -2053,6 +2170,21 @@ def create_financial_report(
         top=0.84,
         bottom=0.18,
         hspace=0.20,
+        wspace=0.30
+    )
+
+    expense_wedges, slice_texts = (
+        create_expense_category_pie_chart(
+            category_axis,
+            expense_category_totals,
+            "EXPENSES BY CATEGORY"
+        )
+    )
+
+    report_figure.subplots_adjust(
+        top=0.84,
+        bottom=0.08,
+        hspace=0.40,
         wspace=0.30
     )
 
@@ -2128,78 +2260,125 @@ def export_financial_data(
 # ============================================================
 def main():
 
-    display_welcome_screen()
+        display_welcome_screen()
 
-    selected_file = select_xlsx_file()
+        selected_file = select_xlsx_file()
 
-    if selected_file is None:
-        print(no_file_selected_error)
-        return
-
-    try:
-        xlsx_path = validate_xlsx_file(selected_file)
-
-        xlsx_file = open_xlsx(xlsx_path)
-
-        if xlsx_file is None:
+        if selected_file is None:
+            print(no_file_selected_error)
             return
 
-        date_column_name = identify_date_column(
-    xlsx_file
-        )
+        try:
+            xlsx_path = validate_xlsx_file(
+                selected_file
+            )
 
-        description_column_name = identify_description_column(
-            xlsx_file
-        )
+            xlsx_file = open_xlsx(
+                xlsx_path
+            )
 
-        start_date, end_date = determine_date_range(
-            xlsx_file,
-            date_column_name
-        )
+            if xlsx_file is None:
+                return
 
-        (
-            transaction_count,
-            total_income,
-            total_expenses,
-            net_balance,
-            amount_values,
-            transaction_types
-        ) = calculate_financial_summary(
-            xlsx_file,
-            description_column_name
-        )
+            date_column_name = identify_date_column(
+                xlsx_file
+            )
 
-        (
-            months,
-            income_totals,
-            expense_totals,
-            income_transaction_counts,
-            expense_transaction_counts
-        ) = calculate_monthly_summary(
-            xlsx_file,
-            date_column_name,
-            amount_values,
-            transaction_types
-        )
+            description_column_name = (
+                identify_description_column(
+                    xlsx_file
+                )
+            )
 
-        report_figure = create_financial_report(
-            transaction_count,
-            start_date,
-            end_date,
-            total_income,
-            total_expenses,
-            net_balance,
-            months,
-            income_totals,
-            expense_totals,
-            income_transaction_counts,
-            expense_transaction_counts
-        )
+            start_date, end_date = determine_date_range(
+                xlsx_file,
+                date_column_name
+            )
 
-        save_financial_report(report_figure,)
+            (
+                transaction_count,
+                total_income,
+                total_expenses,
+                net_balance,
+                amount_values,
+                transaction_types
+            ) = calculate_financial_summary(
+                xlsx_file,
+                description_column_name
+            )
 
-    except Exception as error:
-        print(error)
+            user_owned_account_identifiers = []
+
+            transfer_rule_map = create_transfer_rule_map(
+                user_owned_account_identifiers
+            )
+
+            transfer_subtypes = classify_transfer_subtypes(
+                xlsx_file,
+                description_column_name,
+                transfer_rule_map
+            )
+
+            user_category_identifiers = None
+
+            category_rule_map = create_category_rule_map(
+                user_category_identifiers
+            )
+
+            transaction_categories = (
+                categorize_transactions(
+                    xlsx_file,
+                    description_column_name,
+                    transaction_types,
+                    transfer_subtypes,
+                    category_rule_map
+                )
+            )
+
+            (
+                months,
+                income_totals,
+                expense_totals,
+                income_transaction_counts,
+                expense_transaction_counts
+            ) = calculate_monthly_summary(
+                xlsx_file,
+                date_column_name,
+                amount_values,
+                transaction_types
+            )
+
+            (
+                income_category_totals,
+                expense_category_totals
+            ) = calculate_category_totals(
+                amount_values,
+                transaction_types,
+                transaction_categories
+            )
+
+            report_figure = create_financial_report(
+                transaction_count,
+                start_date,
+                end_date,
+                total_income,
+                total_expenses,
+                net_balance,
+                months,
+                income_totals,
+                expense_totals,
+                income_transaction_counts,
+                expense_transaction_counts,
+                expense_category_totals
+            )
+
+            save_financial_report(
+                report_figure
+            )
+
+        except Exception as error:
+            print(error)
+
 
 if __name__ == "__main__":
     main()
