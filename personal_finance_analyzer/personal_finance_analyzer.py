@@ -5,7 +5,7 @@
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, PathPatch
+from matplotlib.patches import FancyBboxPatch, PathPatch, Rectangle
 from pathlib import Path
 from matplotlib.path import Path as MplPath
 from pathlib import Path
@@ -101,11 +101,15 @@ outgoing_transfers_category = "Outgoing Transfers"
 # ============================================================
 def display_welcome_screen():
 
+    """Display the program title, version, and welcome message."""
 
+    # Display the application header.
     print(divider)
     print(program_title)
     print(application_version)
     print(divider)
+
+    # Display the welcome message.
     print(welcome_message)
     print(divider)
 # ============================================================
@@ -113,46 +117,66 @@ def display_welcome_screen():
 # ============================================================
 def select_xlsx_file():
 
+    """Open a file dialog and return the path of the selected XLSX file."""
+
+    # Create and hide the main Tkinter window.
     root = tk.Tk()
     root.withdraw()
 
+    # Open the file dialog and restrict the available file type to XLSX.
     selected_file = filedialog.askopenfilename(
         title=file_dialog_title,
         filetypes=xlsx_file_types
     )
 
+    # Close the hidden Tkinter window after the dialog is finished.
     root.destroy()
 
+    # Return None when the user closes the dialog without selecting a file.
     if not selected_file:
         return None
 
+    # Return the path of the selected XLSX file.
     return selected_file
 
 def validate_xlsx_file(selected_file):
     
+    """Validate the selected XLSX file and return its Path object."""
+
+    # Convert the selected file path into a Path object.
     xlsx_path = Path(selected_file)
 
+    # Confirm that the selected file exists.
     if not xlsx_path.exists():
         raise Exception(no_file_selected_error)
 
+    # Confirm that the selected file uses the XLSX extension.
     if xlsx_path.suffix != ".xlsx":
         raise Exception(invalid_file_type_error)
 
+    # Confirm that the selected file contains data.
     if xlsx_path.stat().st_size == 0:
         raise Exception(empty_file_error)
 
+    # Return the validated XLSX file path.
     return xlsx_path
 
 def validate_xlsx_files(selected_files):
     pass
 def open_xlsx(xlsx_path):
 
+    """Open an XLSX file and return its contents as a pandas DataFrame."""
+
+    # Attempt to read the XLSX file into a pandas DataFrame.
     try:
         xlsx_file = pd.read_excel(xlsx_path)
+
+    # Display a user-friendly message if the file cannot be opened.
     except Exception:
         print(xlsx_open_error)
         return None
 
+    # Return the successfully loaded XLSX data.
     return xlsx_file
 
 def open_xlsx_files(xlsx_paths):
@@ -161,6 +185,10 @@ def open_xlsx_files(xlsx_paths):
 # COLUMN IDENTIFICATION FUNCTIONS
 # ============================================================
 def identify_date_column(xlsx_file):
+
+    """Identify and return the original name of the statement's date column."""
+
+    # Define the column names that may represent transaction dates.
     possible_date_column_names = [
         "date",
         "transaction date",
@@ -177,27 +205,36 @@ def identify_date_column(xlsx_file):
         "processing date"
     ]
 
+    # Define the error displayed when no supported date column is found.
     no_date_column_found_error = "No Date Column Found."
 
-    normalized_columns = (xlsx_file.columns.str.strip().str.lower())
+    # Normalize the statement's column names for consistent comparison.
+    normalized_columns = xlsx_file.columns.str.strip().str.lower()
 
+    # Convert the supported date column names into a pandas Index.
     possible_date_columns = pd.Index(possible_date_column_names)
 
+    # Find supported date column names within the statement.
     matching_columns = normalized_columns.intersection(
         possible_date_columns
     )
 
+    # Stop the analysis when the statement has no supported date column.
     if len(matching_columns) == 0:
         raise ValueError(no_date_column_found_error)
 
+    # Select the first supported date column that was found.
     matching_column_name = matching_columns[0]
 
+    # Locate the matching column's position in the statement.
     column_position = normalized_columns.get_loc(
         matching_column_name
     )
 
+    # Retrieve the column's original name before normalization.
     date_column_name = xlsx_file.columns[column_position]
 
+    # Return the original date column name.
     return date_column_name
 
 def determine_date_range(xlsx_file,date_column_name ):
@@ -225,6 +262,9 @@ def determine_date_range(xlsx_file,date_column_name ):
 
 def identify_amount_column(xlsx_file):
 
+    """Identify and return the original name of the statement's amount column."""
+
+    # Define the column names that may represent transaction amounts.
     possible_amount_column_names = [
         "amount",
         "transaction amount",
@@ -234,51 +274,78 @@ def identify_amount_column(xlsx_file):
         "payment amount"
     ]
 
+    # Define the error displayed when no supported amount column is found.
     no_amount_column_found_error = "Could not find Amount column"
 
-    normalized_columns = (xlsx_file.columns.str.strip().str.lower())
+    # Normalize the statement's column names for consistent comparison.
+    normalized_columns = xlsx_file.columns.str.strip().str.lower()
 
+    # Convert the supported amount column names into a pandas Index.
     possible_amount_columns = pd.Index(possible_amount_column_names)
 
-    matching_amount = normalized_columns.intersection(possible_amount_columns)
+    # Find supported amount column names within the statement.
+    matching_amount = normalized_columns.intersection(
+        possible_amount_columns
+    )
 
+    # Stop the analysis when the statement has no supported amount column.
     if len(matching_amount) == 0:
         raise ValueError(no_amount_column_found_error)
 
+    # Select the first supported amount column that was found.
     matching_column_name = matching_amount[0]
 
-    column_position = normalized_columns.get_loc(matching_column_name)
+    # Locate the matching column's position in the statement.
+    column_position = normalized_columns.get_loc(
+        matching_column_name
+    )
 
+    # Retrieve the column's original name before normalization.
     amount_column_name = xlsx_file.columns[column_position]
 
+    # Return the original amount column name.
     return amount_column_name
 
 def identify_description_column(xlsx_file):
 
-     description_column_name = [
-            "description",
-            "details"
-        ]
-    
-     missing_description_column = "Could not find transaction description column"
-     normalized_columns = xlsx_file.columns.str.strip().str.lower()
+    """Identify and return the original name of the transaction description column."""
 
-     matching_columns = normalized_columns.intersection(pd.Index(description_column_name))
+    # Define the column names that may contain transaction descriptions.
+    possible_description_column_names = [
+        "description",
+        "details"
+    ]
 
-     if matching_columns.empty:
+    # Define the error displayed when no supported description column is found.
+    missing_description_column = (
+        "Could not find transaction description column"
+    )
+
+    # Normalize the statement's column names for consistent comparison.
+    normalized_columns = xlsx_file.columns.str.strip().str.lower()
+
+    # Find supported description column names within the statement.
+    matching_columns = normalized_columns.intersection(
+        pd.Index(possible_description_column_names)
+    )
+
+    # Stop the analysis when no supported description column is found.
+    if matching_columns.empty:
         raise ValueError(missing_description_column)
 
-     matching_column_name = matching_columns[0]
+    # Select the first supported description column that was found.
+    matching_column_name = matching_columns[0]
 
-     column_position = normalized_columns.get_loc(
+    # Locate the matching column's position in the statement.
+    column_position = normalized_columns.get_loc(
         matching_column_name
     )
 
-     description_column_name = (
-        xlsx_file.columns[column_position]
-    )
+    # Retrieve the column's original name before normalization.
+    description_column_name = xlsx_file.columns[column_position]
 
-     return description_column_name
+    # Return the original description column name.
+    return description_column_name
 # ============================================================
 # STATEMENT PREPARATION FUNCTIONS
 # ============================================================
@@ -299,84 +366,104 @@ def prepare_combined_statement_data(xlsx_files):
 # ============================================================
 def create_transfer_rule_map(user_owned_account_identifiers):
 
-   
-    invalid_owned_account_error = "Owned account must be provided as a collection of text values."
+    """Create and return normalized identifier rules for transfer subtypes."""
 
-   
+    # Define the error displayed for an invalid identifier collection or value.
+    invalid_owned_account_error = "Owned account must be provided as a collection of text values."
+    
+
+    # Use an empty collection when no owned-account identifiers are provided.
     if user_owned_account_identifiers is None:
         user_owned_account_identifiers = []
 
-    else:
-        if user_owned_account_identifiers is not isinstance(list,tuple,set):
-            raise TypeError(invalid_owned_account_error) 
+    # Confirm that the owned-account identifiers are stored in a collection.
+    elif not isinstance(user_owned_account_identifiers,(list, tuple, set)):
+        raise TypeError(invalid_owned_account_error)
 
-    owned_account_values = user_owned_account_identifiers 
+    # Store the user-provided owned-account identifiers.
+    owned_account_values = user_owned_account_identifiers
 
+    # Define identifiers commonly associated with personal transfers.
     default_personal_transfer_identifiers = {
-                "zel to",
-                "zel from",
-                "zelle to",
-                "zelle from",
-                "venmo",
-                "cash app",
-                "cash app payment"
-            } 
-        
-    default_unclassified_transfer_identifiers = {
-                "transfer",
-                "transfer funds",
-                "ach transfer"
-            }
+        "zel to",
+        "zel from",
+        "zelle to",
+        "zelle from",
+        "venmo",
+        "cash app",
+        "cash app payment"
+    }
 
+    # Define general identifiers for transfers without a known subtype.
+    default_unclassified_transfer_identifiers = {
+        "transfer",
+        "transfer funds",
+        "ach transfer"
+    }
+
+    # Associate each transfer subtype with its identifier collection.
     transfer_rule_sources = {
         "Personal transfer identifiers": default_personal_transfer_identifiers,
         "Unclassified transfer identifiers": default_unclassified_transfer_identifiers,
-        "owned account transfer": owned_account_values
+        "Owned account transfer": owned_account_values
     }
 
+    # Create the dictionary that will contain the normalized transfer rules.
     transfer_rule_map = {}
 
+    # Process the identifiers belonging to each transfer subtype.
     for transfer_subtype, identifiers in transfer_rule_sources.items():
 
+        # Create containers for normalized values and duplicate tracking.
         normalized_identifiers = []
         seen_identifiers = set()
 
+        # Normalize and validate each identifier.
         for identifier in identifiers:
 
-            if not isinstance(identifier,str):
+            # Confirm that every identifier is a text value.
+            if not isinstance(identifier, str):
                 raise TypeError(invalid_owned_account_error)
 
+            # Remove surrounding spaces and convert the identifier to lowercase.
             normalized_identifier = identifier.strip().lower()
 
-            if normalized_identifier.empty:
+            # Ignore identifiers that are empty after normalization.
+            if not normalized_identifier:
                 continue
 
+            # Ignore identifiers that have already been added.
             if normalized_identifier in seen_identifiers:
                 continue
 
+            # Store the normalized identifier and mark it as processed.
             normalized_identifiers.append(normalized_identifier)
             seen_identifiers.add(normalized_identifier)
 
+        # Associate the normalized identifiers with their transfer subtype.
         transfer_rule_map[transfer_subtype] = normalized_identifiers
 
-    return transfer_rule_map    
+    # Return the completed transfer subtype rule map.
+    return transfer_rule_map
 
 def classify_transactions(xlsx_file,description_column_name,amount_values):
 
+    """Classify each transaction as a transfer, income, expense, or zero amount."""
 
-    invalid_amount_error = (
-        "Unable to classify transactions because one or more "
-        "amounts are missing or invalid."
-    )
-
+    # Define the error displayed when transaction amounts cannot be classified.
+    invalid_amount_error = "Unable to classify transactions because one or more 'amounts are missing or invalid.'"
     
+
+    # Confirm that the amount data is not empty and contains no missing values.
     if amount_values.empty or amount_values.isna().any():
         raise ValueError(invalid_amount_error)
 
+    # Retrieve the transaction descriptions from the statement.
     normalized_descriptions = xlsx_file[
         description_column_name
     ]
 
+    # Normalize the descriptions for consistent identifier matching.
     normalized_descriptions = (
         normalized_descriptions
         .fillna("")
@@ -385,17 +472,18 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
         .str.lower()
     )
 
-    transfer_identifiers = (
-        default_transfer_identifiers
-        + user_transfer_identifiers
-    )
+    # Combine the default and user-provided transfer identifiers.
+    transfer_identifiers = default_transfer_identifiers + user_transfer_identifiers
+    
 
-    transfer_mask = pd.Series(
-        False,
-        index=xlsx_file.index
-    )
+    # Create a Boolean Series that initially marks every transaction as
+    # not being a transfer.
+    transfer_mask = pd.Series(False,index=xlsx_file.index)
 
+    # Check the transaction descriptions for each transfer identifier.
     for transfer_identifier in transfer_identifiers:
+
+        # Mark descriptions containing the current transfer identifier.
         current_identifier_mask = (
             normalized_descriptions.str.contains(
                 transfer_identifier,
@@ -403,32 +491,41 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
             )
         )
 
+        # Add the current matches to the complete transfer mask.
         transfer_mask = (
             transfer_mask | current_identifier_mask
         )
 
+    # Initially classify every transaction as a zero-amount transaction.
     transaction_types = pd.Series(
         zero_amount_transaction_type,
         index=xlsx_file.index,
         dtype="object"
     )
 
-    transaction_types.loc[
-        transfer_mask
-    ] = transfer_transaction_type
+    # Initially classify every transaction as a zero-amount transaction.
+    transaction_types = pd.Series(
+        zero_amount_transaction_type,
+        index=xlsx_file.index,
+        dtype="object"
+    )
 
+    # Classify every positive amount as income.
     transaction_types.loc[
-        (amount_values > 0) & (~transfer_mask)
+        amount_values > 0
     ] = income_transaction_type
 
+    # Classify every negative amount as an expense.
     transaction_types.loc[
-        (amount_values < 0) & (~transfer_mask)
+        amount_values < 0
     ] = expense_transaction_type
 
+    # Return the transaction type assigned to every statement row.
     return transaction_types
 
 def create_category_rule_map(user_category_identifiers):
 
+    # Define error messages for invalid user category data.
     invalid_user_category_error = "User category identifiers must be provided as a dictionary."
     invalid_category_key_error = "Category section and category names must be text value."
     invalid_category_section_name_error = "User category identifiers contain an unsupported category."
@@ -437,10 +534,12 @@ def create_category_rule_map(user_category_identifiers):
     invalid_category_identifiers_error = "Category identifiers must be provided as a collection of text values."
     invalid_category_identifier_error = "Each category identifier must be a text value."
 
+    # Define the keys used to separate user and default identifiers.
     user_identifier_key = "user identifiers"
     default_identifier_key = "default identifiers"
 
 
+    # Define the default identifiers for each income and expense category.
     default_category_identifiers = {
         income_transaction_type: {
             employment_income_category: [
@@ -493,11 +592,13 @@ def create_category_rule_map(user_category_identifiers):
         }
     } 
 
+    # Map accepted user section names to their canonical transaction types.
     valid_section_names =  {
         "income" : income_transaction_type,
         "expense": expense_transaction_type
     }
 
+    # Define the approved categories for each transaction type.
     valid_categories_by_section = {
         income_transaction_type: [
         employment_income_category,
@@ -510,14 +611,18 @@ def create_category_rule_map(user_category_identifiers):
     ]
     }
 
+    # Use an empty dictionary when no user identifiers are provided.
     if user_category_identifiers is None:
         user_category_identifiers = {}
 
+    # Confirm that the user category identifiers are provided as a dictionary.
     elif not isinstance(user_category_identifiers,dict):
         raise TypeError(invalid_user_category_error)
 
+    # Create a dictionary for the normalized user identifiers.
     normalized_user_identifiers = {}
 
+    # Create an empty user identifier list for every supported category.
     for canonical_section_name, category_section in (default_category_identifiers.items()):
         normalized_user_identifiers[
             canonical_section_name
@@ -530,72 +635,86 @@ def create_category_rule_map(user_category_identifiers):
                 canonical_category_name
             ] = []
 
+    # Process every user-provided category section.
     for section_name, category_section in (
-    user_category_identifiers.items()
-):
-     if not isinstance(section_name, str):
-        raise TypeError(invalid_category_key_error)
+        user_category_identifiers.items()):
+     # Confirm that the section name is a text value.
+        if not isinstance(section_name, str):
+            raise TypeError(invalid_category_key_error)
 
-    normalized_section_name = (
-        section_name
-        .strip()
-        .lower()
-    )
-
-    if normalized_section_name not in valid_section_names:
-        raise ValueError(
-            invalid_category_section_name_error
-        )
-
-    canonical_section_name = valid_section_names[
-        normalized_section_name
-    ]
-
-    if not isinstance(category_section, dict):
-        raise TypeError(
-            invalid__category_section_error
-        )
-
-    for category_name, identifier_collection in (
-        category_section.items()
-    ):
-        if not isinstance(category_name, str):
-            raise TypeError(
-                invalid_category_key_error
-            )
-
-        normalized_category_name = (
-            category_name
+        # Normalize the section name for consistent comparison.
+        normalized_section_name = (
+            section_name
             .strip()
             .lower()
         )
 
-        canonical_category_name = None
-
-        for approved_category_name in (
-            valid_categories_by_section[
-                canonical_section_name
-            ]
-        ):
-            normalized_approved_category_name = (
-                approved_category_name.lower()
+        # Confirm that the section name is supported.
+        if normalized_section_name not in valid_section_names:
+            raise ValueError(
+                invalid_category_section_name_error
             )
 
-            if (
-                normalized_category_name
-                == normalized_approved_category_name
-            ):
-                canonical_category_name = (
-                    approved_category_name
+        # Retrieve the canonical name of the category section.
+        canonical_section_name = valid_section_names[
+            normalized_section_name
+        ]
+
+        # Confirm that the category section is provided as a dictionary.
+        if not isinstance(category_section, dict):
+            raise TypeError(
+                invalid__category_section_error
+            )
+
+        # Process every category and identifier collection in the section.
+        for category_name, identifier_collection in (
+            category_section.items()
+        ):
+            # Confirm that the category name is a text value.
+            if not isinstance(category_name, str):
+                raise TypeError(
+                    invalid_category_key_error
                 )
 
-                break
+            # Normalize the category name for consistent comparison.
+            normalized_category_name = (
+                category_name
+                .strip()
+                .lower()
+            )
 
+            # Prepare to store the approved version of the category name.
+            canonical_category_name = None
+
+            # Compare the category name against the approved categories.
+            for approved_category_name in (
+                valid_categories_by_section[
+                    canonical_section_name
+                ]
+            ):
+                # Normalize the approved category name for comparison.
+                normalized_approved_category_name = (
+                    approved_category_name.lower()
+                )
+
+                # Store the approved category name when a match is found.
+                if (
+                    normalized_category_name
+                    == normalized_approved_category_name
+                ):
+                    canonical_category_name = (
+                        approved_category_name
+                    )
+
+                    break
+
+        # Stop processing when the provided category is unsupported.
         if canonical_category_name is None:
             raise ValueError(
                 invalid_category_name_error
             )
 
+        # Confirm that the identifiers are provided as a collection.
         if not isinstance(
             identifier_collection,
             (list, tuple, set)
@@ -604,6 +723,7 @@ def create_category_rule_map(user_category_identifiers):
                 invalid_category_identifiers_error
             )
 
+        # Retrieve the list that will store the normalized identifiers.
         normalized_identifiers = (
             normalized_user_identifiers[
                 canonical_section_name
@@ -612,36 +732,45 @@ def create_category_rule_map(user_category_identifiers):
             ]
         )
 
+        # Track identifiers that have already been added.
         seen_identifiers = set(
             normalized_identifiers
         )
 
+        # Validate and normalize every user-provided identifier.
         for identifier in identifier_collection:
+            # Confirm that the identifier is a text value.
             if not isinstance(identifier, str):
                 raise TypeError(
                     invalid_category_identifier_error
                 )
 
+            # Remove surrounding spaces and convert the identifier to lowercase.
             normalized_identifier = (
                 identifier
                 .strip()
                 .lower()
             )
 
+            # Ignore empty identifiers.
             if normalized_identifier == "":
                 continue
 
+            # Ignore identifiers that have already been added.
             if normalized_identifier in seen_identifiers:
                 continue
 
+            # Add the normalized identifier to its category.
             normalized_identifiers.append(
                 normalized_identifier
             )
 
+            # Mark the identifier as already added.
             seen_identifiers.add(
                 normalized_identifier
             )
 
+    # Process every normalized category section.
     for canonical_section_name in normalized_user_identifiers:
         current_normalized_user_section = (
             normalized_user_identifiers[
@@ -649,6 +778,7 @@ def create_category_rule_map(user_category_identifiers):
             ]
         )
 
+        # Sort the user identifiers stored in every category.
         for canonical_category_name in (
             current_normalized_user_section
         ):
@@ -656,28 +786,34 @@ def create_category_rule_map(user_category_identifiers):
                 canonical_category_name
             ].sort()
 
+    # Create the final category rule map.
     category_rule_map = {}
 
+    # Process each default income and expense section.
     for (
         canonical_section_name,
         default_category_section
     ) in default_category_identifiers.items():
 
+        # Create the category dictionary for the current section.
         category_rule_map[
             canonical_section_name
         ] = {}
 
+        # Process each category and its default identifiers.
         for (
             canonical_category_name,
             default_identifiers
         ) in default_category_section.items():
 
+            # Retrieve the normalized user identifiers for the category.
             user_identifiers = normalized_user_identifiers[
                 canonical_section_name
             ][
                 canonical_category_name
             ]
 
+            # Store the user and default identifiers separately.
             category_rule_map[
                 canonical_section_name
             ][
@@ -691,10 +827,12 @@ def create_category_rule_map(user_category_identifiers):
                 )
             }
 
-    return category_rule_map
+    # Return the completed category rule map.
+    return category_rule_map 
 
 def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
+   # Define error messages for invalid or misaligned categorization data.
     missing_description_column_error = "The transaction description column could not be found."
     misaligned_transaction_types_error = "Transaction types do not align with the statement transactions."
     misaligned_transfer_subtypes_error = "Transfer subtypes do not align with the statement transactions."
@@ -703,6 +841,7 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
     invalid_transaction_type_error = "Unable to categorize transaction because its transaction type is invalid."
     invalid_transfer_subtype_error = "Unable to categorize transaction because its transfer subtype is invalid."
 
+    # Define the order in which expense categories are evaluated.
     expense_categories = [
         housing_category,
         utilities_category,
@@ -714,65 +853,85 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
         shopping_category
     ]
 
+    # Define the order in which income categories are evaluated.
     income_categories = [
        employment_income_category,
         refund_reimbursement_category
     ]
 
+    # Define the category rule keys and matching priority values.
     user_identifier_key = "user identifiers"
     default_identifier_key = "default identifiers"
     user_identifier = 2
     default_identifier = 1
+
+    # Define the categories assigned to personal and unclassified transfers.
     incoming_transfers_category = "Incoming Transfers"
     outgoing_transfers_category = "Outgoing Transfers"
 
 
+    # Confirm that the description column exists in the statement.
     if description_column_name not in xlsx_file.columns:
         raise ValueError( missing_description_column_error)
 
+    # Confirm that the transaction types align with the statement rows.
     if not transaction_types.index.equals(xlsx_file.index):
         raise ValueError(misaligned_transaction_types_error)
 
+    # Confirm that the transfer subtypes align with the statement rows.
     if not transfer_subtypes.index.equals(xlsx_file.index):
         raise ValueError(misaligned_transfer_subtypes_error)
 
+    # Confirm that the category rules are provided as a dictionary.
     if not isinstance(category_rule_map,dict):
         raise TypeError(invalid_category_rule_map_error)
 
+    # Confirm that the rule map contains income and expense rules.
     if (income_transaction_type not in category_rule_map or expense_transaction_type not in category_rule_map):
         raise ValueError(incomplete_category_rule_map_error)
 
+    # Retrieve and normalize the transaction descriptions.
     normalized_descriptions = xlsx_file[description_column_name]
     normalized_descriptions = normalized_descriptions.fillna("").astype(str).str.strip().str.lower()
 
+    # Create an empty Series for the transaction category results.
     transaction_categories = pd.Series(pd.NA,index=xlsx_file.index, dtype = "object")
 
+    # Categorize each transaction in the statement.
     for transaction_index in xlsx_file.index:
 
+        # Retrieve the current transaction's classification data.
         transaction_type = transaction_types.loc[transaction_index]
         transfer_subtype = transfer_subtypes.loc[transaction_index]
         normalized_description = normalized_descriptions.loc[transaction_index]
 
+        # Confirm that the transaction has a supported transaction type.
         if transaction_type not in (income_transaction_type, expense_transaction_type, zero_amount_transaction_type):
             raise ValueError(invalid_transaction_type_error)
         
+        # Confirm that the transaction has a supported transfer subtype.
         if transfer_subtype not in (personal_transfer, owned_account_transfer, unclassified_transfer,not_a_transfer):
             raise ValueError(invalid_transfer_subtype_error) 
 
 
+        # Leave zero-amount transactions uncategorized.
         if transaction_type == zero_amount_transaction_type:
             continue
 
+        # Leave transfers between the user's accounts uncategorized.
         if transfer_subtype == owned_account_transfer:
             continue
 
+        # Categorize personal and unclassified transfers by their direction.
         if transfer_subtype in (personal_transfer, unclassified_transfer):
 
+             # Categorize incoming transfers.
              if transaction_type == income_transaction_type:
                 transaction_categories.loc[
                     transaction_index
                     ] = incoming_transfers_category
 
+             # Categorize outgoing transfers.
              elif transaction_type == expense_transaction_type:
                     transaction_categories.loc[
                     transaction_index
@@ -780,6 +939,7 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
 
              continue 
 
+        # Select the income rules, category priority, and fallback category.
         if transaction_type == income_transaction_type:
 
                 applicable_category_rules = category_rule_map[income_transaction_type]
@@ -787,12 +947,14 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
                 category_priority = income_categories
                 fallback_category = other_income_category 
 
+        # Select the expense rules, category priority, and fallback category.
         else: 
             applicable_category_rules = category_rule_map[expense_transaction_type]
 
             category_priority = expense_categories
             fallback_category = other_expense_category
 
+        # Use the fallback category when the transaction description is empty.
         if normalized_description == "":
                 transaction_categories.loc[
                 transaction_index
@@ -800,56 +962,70 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
 
                 continue 
 
+        # Prepare to track the strongest category match.
         selected_category = pd.NA
         best_source_priority = 0
         best_identifier_length = 0
 
+        # Search the categories in their assigned priority order.
         for category_name in category_priority:
 
+            # Retrieve the identifier rules for the current category.
             category_rules = applicable_category_rules[
                 category_name
             ]
 
+            # Search user identifiers before default identifiers.
             for identifier_source in (user_identifier_key, default_identifier_key):
 
+                # Assign the matching priority for the identifier source.
                 if identifier_source == user_identifier_key:
                     source_priority = user_identifier
 
                 else:
                     source_priority = default_identifier
 
+                # Retrieve the identifiers from the current source.
                 identifiers = category_rules[identifier_source]
 
+                # Compare each identifier with the transaction description.
                 for identifier in identifiers:
 
                     if  identifier in normalized_description:
 
+                        # Measure the matching identifier's specificity.
                         identifier_length = len(identifier)
 
+                        # Select matches from the higher-priority source.
                         if source_priority > best_source_priority:
                             selected_category = category_name
                             best_source_priority = source_priority
                             best_identifier_length = identifier_length
 
+                        # Prefer the longer identifier when priorities are equal.
                         elif (source_priority == best_source_priority and identifier_length > best_identifier_length):
                             selected_category = category_name
                             best_identifier_length = identifier_length
 
+        # Assign the category selected by the identifier rules.
         if pd.notna(selected_category):
 
             transaction_categories.loc[
                 transaction_index
             ] = selected_category
 
+        # Use the fallback category when no identifier matches.
         else:
             transaction_categories.loc[
             transaction_index
         ] = fallback_category
 
-    return transaction_categories        
+    # Return the category assigned to every transaction.
+    return transaction_categories          
 
 def calculate_category_totals(amount_values,transaction_types,transaction_categories):
     
+    # Define error messages for invalid, missing, or misaligned transaction data.
     invalid_amount_values_type_error = "Amount values must be provided as a pandas Series."
     invalid_transaction_types_error = "Transaction types must be provided as a pandas Series."
     invalid_transaction_categories_error = "Transaction categories must be provided as a pandas Series."
@@ -860,6 +1036,7 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
     amount_type_mismatch_error =  "A transaction amount does not match its transaction type."
     invalid_transaction_category_error = "A transaction category does not match its transaction type."
 
+    # Define the supported income categories and their display order.
     income_categories = [
         employment_income_category,
         refund_reimbursement_category,
@@ -867,6 +1044,7 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
         other_income_category
     ]
 
+    # Define the supported expense categories and their display order.
     expense_categories = [
         housing_category,
         utilities_category,
@@ -880,99 +1058,136 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
         other_expense_category
         ]
 
+    # Confirm that the transaction amounts are provided as a pandas Series.
     if not isinstance(amount_values,pd.Series):
         raise TypeError(invalid_amount_values_type_error)
 
+    # Confirm that the transaction types are provided as a pandas Series.
     if not isinstance(transaction_types,pd.Series):
         raise TypeError(invalid_transaction_types_error)
 
+    # Confirm that the transaction categories are provided as a pandas Series.
     if not isinstance(transaction_categories,pd.Series):
         raise TypeError(invalid_transaction_categories_error)
 
+    # Confirm that the transaction types align with the transaction amounts.
     if not transaction_types.index.equals(amount_values.index):
         raise ValueError(misaligned_transaction_types_error)
 
+    # Confirm that the transaction categories align with the transaction amounts.
     if not transaction_categories.index.equals(amount_values.index):
         raise ValueError(misaligned_transaction_categories_error)
 
+    # Stop the calculation when any transaction amount is missing.
     if amount_values.isna().any():
         raise ValueError(invalid_amount_values_error)
 
+    # Confirm that the transaction amounts contain numeric values.
     if not pd.api.types.is_numeric_dtype(amount_values):
         raise ValueError(invalid_amount_values_error) 
 
+    # Return empty category totals when there are no transaction amounts.
     if amount_values.empty:
         income_category_totals = pd.Series(dtype = "float")
         expense_category_totals = pd.Series(dtype = "float")
         return income_category_totals,expense_category_totals
 
+    # Validate the type, amount, and category of every transaction.
     for transaction_index in amount_values.index:
 
+        # Retrieve the current transaction amount and transaction type.
         transaction_amount = amount_values.loc[transaction_index]
         transaction_type = transaction_types.loc[transaction_index]
 
+        # Retrieve the current transaction category.
         transaction_category = transaction_categories.loc[transaction_index]
 
+        # Confirm that the transaction has a supported transaction type.
         if transaction_type not in (income_transaction_type,expense_transaction_type,zero_amount_transaction_type):
             raise ValueError( invalid_transaction_type_error)
 
+        # Validate income transactions.
         if transaction_type == income_transaction_type:
 
+            # Confirm that an income transaction has a positive amount.
             if transaction_amount <= 0:
                 raise ValueError(amount_type_mismatch_error)
 
+            # Skip income transactions that do not have a category.
             if pd.isna(transaction_category):
                 continue
 
+            # Confirm that the transaction uses a supported income category.
             if transaction_category not in income_categories:
                 raise ValueError (invalid_transaction_category_error)
 
+        # Validate expense transactions.
         elif transaction_type == expense_transaction_type:
 
+            # Confirm that an expense transaction has a negative amount.
             if transaction_amount >= 0:
                 raise ValueError(amount_type_mismatch_error)
 
+            # Skip expense transactions that do not have a category.
             if pd.isna(transaction_category):
                 continue
 
+            # Confirm that the transaction uses a supported expense category.
             if transaction_category not in expense_categories:
                 raise ValueError(invalid_transaction_category_error)
 
+        # Validate zero-amount transactions.
         else:
 
+            # Confirm that a zero-amount transaction has an amount of zero.
             if transaction_amount != 0:
                 raise ValueError(amount_type_mismatch_error)
 
+            # Confirm that a zero-amount transaction does not have a category.
             if  pd.notna(transaction_category):
                 raise ValueError(invalid_transaction_category_error)
 
+    # Combine the transaction data into a DataFrame for category calculations.
     category_data = pd.DataFrame({"amount":amount_values,"transaction_type": transaction_types,"transaction_category": transaction_categories})
 
+    # Remove transactions that do not have an assigned category.
     categorized_data = category_data.dropna(subset=["transaction_category"])
 
+    # Select transactions categorized as income.
     income_data = categorized_data[categorized_data["transaction_type"] == income_transaction_type]
 
+    # Calculate the total amount for each income category.
     income_category_totals = income_data.groupby("transaction_category")["amount"].sum()
 
+    # Arrange the income totals in the defined category order.
     income_category_totals = income_category_totals.reindex(income_categories, fill_value=0)
 
+    # Remove income categories that have a total of zero.
     income_category_totals = income_category_totals[income_category_totals != 0]
 
+    # Convert the income category totals to floating-point values.
     income_category_totals = income_category_totals.astype(float)
 
+    # Select transactions categorized as expenses.
     expense_data = categorized_data[categorized_data["transaction_type"] == expense_transaction_type]
 
+    # Calculate the total amount for each expense category.
     expense_category_totals = expense_data.groupby("transaction_category")["amount"].sum()
 
+    # Convert the negative expense totals into positive values.
     expense_category_totals = expense_category_totals.abs()
 
+    # Arrange the expense totals in the defined category order.
     expense_category_totals = expense_category_totals.reindex(expense_categories, fill_value=0)
 
+    # Remove expense categories that have a total of zero.
     expense_category_totals = expense_category_totals[expense_category_totals != 0]
 
+    # Convert the expense category totals to floating-point values.
     expense_category_totals = expense_category_totals.astype(float)
 
-    return income_category_totals, expense_category_totals  
+    # Return the calculated income and expense category totals.
+    return income_category_totals, expense_category_totals
 
 # ============================================================
 # FINANCIAL CALCULATION FUNCTIONS
@@ -985,38 +1200,52 @@ def count_transactions(xlsx_file):
 
 def calculate_financial_summary(xlsx_file,description_column_name):
 
+     # Count the total number of transactions in the statement.
     transaction_count = count_transactions(xlsx_file)
 
+    # Identify the column containing the transaction amounts.
     amount_column_name = identify_amount_column(xlsx_file)
 
+    # Retrieve the transaction amounts from the statement.
     amount_values = xlsx_file[amount_column_name]
 
+    # Convert the transaction amounts into text for cleaning.
     amount_values = amount_values.astype(str)
 
+    # Remove dollar signs from the transaction amounts.
     amount_values = amount_values.str.replace("$","",regex=False)
 
+    # Remove commas from the transaction amounts.
     amount_values = amount_values.str.replace(",","",regex=False)
 
+    # Convert the cleaned transaction amounts into numeric values.
     amount_values = pd.to_numeric(amount_values,errors="coerce")
 
+    # Classify each transaction using its description and amount.
     transaction_types = classify_transactions(xlsx_file,description_column_name,amount_values)
 
+    # Select the amounts classified as income.
     income_amounts = amount_values[
         transaction_types == income_transaction_type
     ]
 
+    # Select the amounts classified as expenses.
     expense_amounts = amount_values[
         transaction_types == expense_transaction_type
     ]
 
+    # Calculate the total income.
     total_income = income_amounts.sum()
 
+    # Calculate the total expenses.
     total_expenses = expense_amounts.sum()
 
+    # Calculate the balance remaining after expenses.
     net_balance = (
         total_income + total_expenses
     )
 
+    # Return the complete financial summary and transaction data.
     return (
         transaction_count,
         total_income,
@@ -1026,64 +1255,72 @@ def calculate_financial_summary(xlsx_file,description_column_name):
         transaction_types
     )
 
-def calculate_monthly_summary(
-    xlsx_file,
-    date_column_name,
-    amount_values,
-    transaction_types
-):
+def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transaction_types):
 
+       # Combine the dates, amounts, and transaction types into one DataFrame.
     monthly_data = pd.DataFrame({
         "date": xlsx_file[date_column_name],
         "amount": amount_values,
         "transaction_type": transaction_types
     })
 
+    # Convert the statement dates into pandas datetime values.
     monthly_data["date"] = pd.to_datetime(
         monthly_data["date"],
         errors="coerce"
     )
 
+    # Remove transactions with missing dates, amounts, or transaction types.
     monthly_data = monthly_data.dropna(
         subset=["date", "amount", "transaction_type"]
     )
 
+    # Extract the month name from each transaction date.
     monthly_data["month"] = (
         monthly_data["date"].dt.month_name()
     )
 
+    # Select the transactions classified as income.
     monthly_income = monthly_data[
         monthly_data["transaction_type"]
         == income_transaction_type
     ]
 
+    # Select the transactions classified as expenses.
     monthly_expenses = monthly_data[
         monthly_data["transaction_type"]
         == expense_transaction_type
     ]
 
+    # Calculate the total income for each month.
     monthly_income_totals = (
         monthly_income.groupby("month")["amount"].sum()
     )
 
+    # Calculate the total expenses for each month.
     monthly_expense_totals = (
         monthly_expenses.groupby("month")["amount"].sum()
     )
 
+    # Count the income transactions in each month.
     monthly_income_transaction_counts = (
         monthly_income.groupby("month").size()
     )
 
+    # Count the expense transactions in each month.
     monthly_expense_transaction_counts = (
         monthly_expenses.groupby("month").size()
     )
 
+    # Count all transactions in each month.
     monthly_transactions = (
         monthly_data.groupby("month").size()
     )
 
+    # Retrieve the months that contain transaction data.
     months = monthly_transactions.index
 
+    # Align the monthly income totals with the complete month list.
     monthly_income_totals = (
         monthly_income_totals.reindex(
             months,
@@ -1091,6 +1328,7 @@ def calculate_monthly_summary(
         )
     )
 
+    # Align the monthly expense totals with the complete month list.
     monthly_expense_totals = (
         monthly_expense_totals.reindex(
             months,
@@ -1098,6 +1336,7 @@ def calculate_monthly_summary(
         )
     )
 
+    # Align the monthly income transaction counts with the complete month list.
     monthly_income_transaction_counts = (
         monthly_income_transaction_counts.reindex(
             months,
@@ -1105,6 +1344,7 @@ def calculate_monthly_summary(
         )
     )
 
+    # Align the monthly expense transaction counts with the complete month list.
     monthly_expense_transaction_counts = (
         monthly_expense_transaction_counts.reindex(
             months,
@@ -1112,8 +1352,10 @@ def calculate_monthly_summary(
         )
     )
 
+    # Confirm that every month contains income and expense transactions.
     for month_name in months:
 
+        # Stop the calculation when a month has no income transactions.
         if (
             monthly_income_transaction_counts.loc[
                 month_name
@@ -1124,6 +1366,7 @@ def calculate_monthly_summary(
                 f"{month_name} has no income transactions."
             )
 
+        # Stop the calculation when a month has no expense transactions.
         if (
             monthly_expense_transaction_counts.loc[
                 month_name
@@ -1134,24 +1377,30 @@ def calculate_monthly_summary(
                 f"{month_name} has no expense transactions."
             )
 
+    # Convert the month index into a list.
     months = months.tolist()
 
+    # Convert the monthly income totals into a list.
     income_totals = (
         monthly_income_totals.tolist()
     )
 
+    # Convert the expense totals into positive values and store them in a list.
     expense_totals = (
         monthly_expense_totals.abs().tolist()
     )
 
+    # Convert the monthly income transaction counts into a list.
     income_transaction_counts = (
         monthly_income_transaction_counts.tolist()
     )
 
+    # Convert the monthly expense transaction counts into a list.
     expense_transaction_counts = (
         monthly_expense_transaction_counts.tolist()
     )
 
+    # Return the monthly totals and transaction counts.
     return (
         months,
         income_totals,
@@ -1186,7 +1435,7 @@ def validate_financial_insights(
 # ============================================================
 def determine_financial_health(total_income, total_expenses):
 
-    # SET the savings-rate thresholds
+      # SET the savings-rate thresholds
     very_healthy_threshold = 20
     healthy_threshold = 10
     needs_attention_threshold = 5
@@ -1198,54 +1447,72 @@ def determine_financial_health(total_income, total_expenses):
     # SET the invalid-income error message
     invalid_total_income_error = "Total income cannot be less than zero."
 
+    # Confirm that the total income is not negative.
     if total_income < 0:
         raise ValueError(invalid_total_income_error)
 
+    # Convert total expenses into a positive value for the calculation.
     normalized_expenses = abs(total_expenses)
 
+    # Handle financial health calculations when there is no income.
     if total_income == 0:
 
+        # Use no savings rate because it cannot be calculated without income.
         savings_rate = None
 
+        # Use an undetermined status when there is no income or spending.
         if normalized_expenses == 0:
             financial_health = unable_to_determine_status
 
+        # Use the lowest measurable status when spending exists without income.
         else:
             financial_health = very_weak_status
 
+        # Return the result without performing the savings-rate calculation.
         return financial_health, savings_rate
 
+    # Calculate the balance remaining after expenses.
     calculated_net_balance = total_income - normalized_expenses
 
+    # Calculate the percentage of income remaining after expenses.
     savings_rate = (
         calculated_net_balance / total_income
     ) * 100
 
+    # Assign the Very Healthy status.
     if savings_rate >= very_healthy_threshold:
         financial_health = very_healthy_status
 
+    # Assign the Healthy status.
     elif savings_rate >= healthy_threshold:
         financial_health = healthy_status
 
+    # Assign the Needs Attention status.
     elif savings_rate >= needs_attention_threshold:
         financial_health = needs_attention_status
 
+    # Assign the Caution status.
     elif savings_rate >= caution_threshold:
         financial_health = caution_status
 
+    # Assign the Weak status.
     elif savings_rate >= weak_threshold:
         financial_health = weak_status
 
+    # Assign the Very Weak status.
     elif savings_rate >= very_weak_threshold:
         financial_health = very_weak_status
 
+    # Assign the At Risk status when no threshold is reached.
     else:
         financial_health =at_risk_status 
 
+    # Return the financial health status and calculated savings rate.
     return financial_health, savings_rate
 
 def get_financial_health_colors(financial_health):
 
+    # Map each financial health status to its foreground and background colors.
     health_color_map = {
         very_healthy_status: ("#006400", "#E8F5E9"),
         healthy_status: ("#228B22", "#EEF8EE"),
@@ -1256,59 +1523,73 @@ def get_financial_health_colors(financial_health):
         very_weak_status: ("#8B0000", "#FDECEC"),
         unable_to_determine_status: ("#666666", "#F2F2F2")
 }
+    # Define the colors used when the financial health status is not recognized.
     default_colors = ("#666666", "#F2F2F2")
 
-    selected_colors = health_color_map.get(
-        financial_health,
-        default_colors
-    )
+    # Retrieve the colors for the financial health status.
+    selected_colors = health_color_map.get(financial_health,default_colors)
+
+    # Separate the selected foreground and background colors.
     (
         status_forground_color,
         status_background_color
     ) = selected_colors
 
-    return status_forground_color, status_background_color   
+    # Return the foreground and background colors.
+    return status_forground_color, status_background_color
 
 def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
+     # Define the text displayed in the financial health summary.
     financial_health_title = "Financial Health"
     status_label = "Status:"
     savings_rate_label = "Savings Rate:"
     unavailable_rate_text = "N/A"
 
+    # Define the financial health card's position and dimensions.
     card_x_position = 0.01
     card_y_position = 0.45
     card_width = .98
     card_height = .8
 
+    # Define the positions of the text displayed inside the card.
     common_vertical_position = .80
     title_horizontal_position = .16
     status_label_horizontal_position = .41
     savings_label_horizontal_position = .74
     savings_result_horizontal_position = .75
 
+    # Define the font sizes used for the card text.
     title_font_size = 13
     label_font_size = 11
     result_font_size = 11
 
+    # Define the card border width and corner rounding.
     card_border_width = 1.5
     corner_rounding_size = .03
 
+    # Hide the axis lines, labels, and ticks.
     financial_health_axis.axis("off")
 
+    # Retrieve the foreground and background colors for the health status.
     (
     status_foreground_color,
     status_background_color
     ) = get_financial_health_colors(financial_health)
 
+    # Display N/A when a savings rate could not be calculated.
     if savings_rate == None:
         formatted_saving_rate = unavailable_rate_text
+
+    # Format the calculated savings rate as a percentage.
     else:
        formatted_saving_rate = f"{savings_rate:.2f}%"
 
+    # Prepare the financial health status and savings-rate text.
     status_text = financial_health
     savings_rate_text = formatted_saving_rate
 
+    # Create the rounded financial health summary card.
     financial_health_card = FancyBboxPatch(
     (card_x_position, card_y_position),
     card_width,
@@ -1324,8 +1605,11 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     clip_on=False,
     zorder=0
 )
+
+    # Add the financial health card to the axis.
     financial_health_axis.add_patch(financial_health_card)
 
+    # Display the financial health title.
     financial_health_axis.text(
         title_horizontal_position,
         common_vertical_position,
@@ -1339,6 +1623,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         zorder=1
     )
     
+    # Display the status label.
     financial_health_axis.text(
         status_label_horizontal_position,
         common_vertical_position,
@@ -1352,6 +1637,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         zorder=1
     )
 
+    # Display the calculated financial health status.
     financial_health_axis.text(
         status_label_horizontal_position,
         common_vertical_position,
@@ -1365,6 +1651,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         zorder=1
     )
 
+    # Display the savings-rate label.
     financial_health_axis.text(
         savings_label_horizontal_position,
         common_vertical_position,
@@ -1378,6 +1665,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         zorder=1
     )
 
+    # Display the formatted savings-rate result.
     financial_health_axis.text(
         savings_result_horizontal_position,
         common_vertical_position,
@@ -1391,19 +1679,25 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         zorder=1
     )
 
-    return None   
+    # Finish the function without returning a value.
+    return None
 # ============================================================
 # TABLE STYLING FUNCTIONS
 # ============================================================
 def style_financial_table(financial_table):
 
+      # Retrieve the table's cells.
    fin_tab = financial_table.get_celld()
 
+   # Apply formatting to every cell in the financial table.
    for (row, column), cell in fin_tab.items():
 
+        # Style cells in the table's header row.
         if row == 0:
             header_cell = cell
             header_cell.set_facecolor("darkblue")
+
+            # Format the header text.
             header_cell.set_text_props(
                 color="white",
                 weight="bold",
@@ -1411,50 +1705,58 @@ def style_financial_table(financial_table):
                 ha="center",
                 va="center"
             )
+
+            # Format the header cell borders.
             header_cell.set_edgecolor("white")
             header_cell.set_linewidth(1.0)
 
+        # Style cells containing financial data.
         else:
             data_cell = cell
 
+            # Apply alternating background colors to even-numbered rows.
             if row % 2 == 0:
                 data_cell.set_facecolor("whitesmoke")
+
+            # Apply a white background to odd-numbered rows.
             else:
                 data_cell.set_facecolor("white")
 
+            # Format the data cell text.
             data_cell.set_text_props(
                 fontsize=10,
                 ha="center",
                 va="center"
             )
+
+            # Format the data cell borders.
             data_cell.set_edgecolor("lightgray")
             data_cell.set_linewidth(0.8)
 
+   # Increase the height of the table cells.
    financial_table.scale(1.0, 2.0)
 
+   # Finish the function without returning a value.
    return None
 # ============================================================
 # INCOME AND EXPENSE CHART FUNCTIONS
 # ============================================================
-def create_monthly_income_expenses_chart(
-        income_axis,
-        months,
-        income_totals,
-        expense_totals
-):
+def create_monthly_income_expenses_chart(income_axis,months,income_totals,expense_totals):
 
-    # SET the width of each bar
+        # Set the width of each bar.
     bar_width = 0.15
 
-    # SET the positions of the bars on the x-axis
+    # Set the amount of space between the income and expense bars.
     bar_gap = 0.07  
     
-    # CALCULATE the x-axis positions for each month
+    # Calculate the central x-axis position for each month.
     x_positions = np.arange(len(months))
 
+    # Position the income and expense bars on opposite sides of each month.
     income_positions = x_positions - ((bar_width + bar_gap) / 2)
     expense_positions = x_positions + ((bar_width + bar_gap) / 2)
 
+    # Create the monthly income bars.
     income_bars = income_axis.bar(
         income_positions,
         income_totals,
@@ -1465,6 +1767,7 @@ def create_monthly_income_expenses_chart(
         zorder = 2   
         )
 
+    # Create the monthly expense bars.
     expense_bars = income_axis.bar(
         expense_positions,
         expense_totals,
@@ -1475,16 +1778,20 @@ def create_monthly_income_expenses_chart(
         zorder = 2
     )
 
+    # Position the x-axis tick marks and label them with the months.
     income_axis.set_xticks(x_positions)
     income_axis.set_xticklabels(months)
 
+    # Add the x-axis label, y-axis label, and chart title.
     income_axis.set_xlabel("Month")
     income_axis.set_ylabel("Amount ($)")
     income_axis.set_title("MONTHLY INCOME vs EXPENSES",fontsize=15, fontweight="bold", color="black")
 
+    # Hide the top and right chart borders.
     income_axis.spines["top"].set_visible(False)
     income_axis.spines["right"].set_visible(False)
 
+    # Add horizontal grid lines to make the values easier to compare.
     income_axis.yaxis.grid(
         True,
         linestyle="--",
@@ -1493,22 +1800,30 @@ def create_monthly_income_expenses_chart(
         zorder = 2
     )
 
+    # Add the income and expense legend below the chart.
     income_axis.legend(loc = "lower center",bbox_to_anchor=(0.1, -0.35),
     ncol=1,fontsize=11,frameon=False, columnspacing = 5)
     
+    # Return the income and expense bar containers.
     return income_bars, expense_bars
 
 def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
+    # Retrieve the current lower and upper limits of the y-axis.
     current_ylim, current_ymax = income_axis.get_ylim()
 
+    # Define the space above each label and the additional y-axis space.
     label_offset_percentage = 0.02
     y_axis_expansion_percentage = 0.08
+
+    # Calculate and apply the amount needed to expand the y-axis.
     expansion_amount = current_ymax * y_axis_expansion_percentage
     new_ymax = current_ymax + expansion_amount
 
+    # Calculate the vertical space between each bar and its value label.
     label_offset = current_ymax * label_offset_percentage
 
+    # Add a formatted value label above every income bar.
     for income_bar in income_bars:
         bar_height = income_bar.get_height()
         bar_center = (income_bar.get_x() + income_bar.get_width() / 2)
@@ -1523,6 +1838,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
             color="black"
         )
         
+    # Add a formatted value label above every expense bar.
     for expense_bar in expense_bars:
         bar_height = expense_bar.get_height()
         bar_center = (expense_bar.get_x() + expense_bar.get_width() / 2)
@@ -1537,8 +1853,10 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
             color="black"
         )
     
+    # Expand the y-axis to provide room for the value labels.
     income_axis.set_ylim(current_ylim, new_ymax)
 
+    # Create the rounded card surrounding the income and expense chart.
     card = FancyBboxPatch(
         (-0.15, -0.32),
         1.17,
@@ -1552,16 +1870,19 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
         zorder=-1
 )
 
-    income_axis.add_patch(card)  
+    # Add the rounded card to the chart.
+    income_axis.add_patch(card)
 
 def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
 
+    # Define error messages for invalid chart data and settings.
     invalid_category_totals_error = "Category totals must be provided as a pandas Series."
     invalid_chart_title_error = "Chart title must be provided as nonempty text."
     invalid_category_total_values_error = "Category totals must contain valid nonnegative numeric values."
     invalid_expense_category_error = "Expense category totals contain an unsupported category."
     duplicate_expense_category_error = "Expense category totals contain duplicate category labels."
 
+    # Define the chart text and donut chart settings.
     empty_chart_message = "No categorized expenses available."
     center_label_txt = "TOTAL SPENDING"
     minimum_visible_percentage = 3
@@ -1569,6 +1890,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
     donut_ring_width = 0.38
     donut_center_x = -0.2
 
+    # Define the expense categories that the chart supports.
     approved_expense_categories = {
         housing_category,
         utilities_category,
@@ -1582,6 +1904,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
         other_expense_category
     }
 
+    # Assign a chart color to each displayed expense category.
     expense_category_color_map = {
         housing_category: "#1F4E79",
         utilities_category: "#B35C00",
@@ -1594,47 +1917,63 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
         other_expense_category: "#4A4A4A"
     }
 
+    # Confirm that the category totals are provided as a pandas Series.
     if not isinstance(category_totals, pd.Series):
         raise TypeError(invalid_category_totals_error)
 
+    # Confirm that the chart title is provided as text.
     if not isinstance(chart_title,str):
         raise TypeError(invalid_chart_title_error)
 
+    # Remove surrounding spaces from the chart title.
     cleaned_chart_title = chart_title.strip()
 
+    # Confirm that the chart title contains visible text.
     if cleaned_chart_title == "":
         raise ValueError(invalid_chart_title_error)
 
+    # Confirm that the category totals contain numeric values.
     if not pd.api.types.is_numeric_dtype(category_totals):
         raise ValueError( invalid_category_total_values_error)
 
+    # Confirm that the category totals do not contain missing values.
     if category_totals.isna().any():
         raise ValueError(invalid_category_total_values_error)
 
+    # Confirm that the category totals do not contain negative values.
     if (category_totals < 0).any() :
         raise ValueError(invalid_category_total_values_error)
 
+    # Confirm that every expense category appears only once.
     if category_totals.index.has_duplicates:
         raise ValueError(duplicate_expense_category_error) 
 
+    # Confirm that every category is supported by the expense chart.
     for category_name in category_totals.index:
 
         if pd.isna(category_name) or category_name not in approved_expense_categories:
             raise ValueError(invalid_expense_category_error)
 
+    # Hide the axis lines, labels, and tick marks.
     category_axis.axis("off")
 
+    # Keep the donut chart circular by using equal axis proportions.
     category_axis.set_aspect("equal")
 
+    # Add the cleaned title above the chart.
     category_axis.set_title(cleaned_chart_title, loc='center', pad=15, fontsize=15, fontweight= "bold", color="black")
 
+    # Create a copy of the category totals for chart preparation.
     chart_totals = category_totals.copy()
 
+    # Remove outgoing transfers from the spending chart.
     if outgoing_transfers_category in chart_totals.index:
         chart_totals = chart_totals.drop(index=outgoing_transfers_category)
 
+    # Remove categories that have no spending.
     chart_totals = chart_totals[chart_totals > 0]
 
+    # Display a message when there are no categorized expenses to chart.
     if chart_totals.empty:
         category_axis.text(
             0.5,
@@ -1647,24 +1986,33 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
             color="dimgray"
         )
 
+        # Return empty chart element collections.
         return [], []
 
+    # Calculate the total spending displayed by the chart.
     total_spending = chart_totals.sum()
+
+    # Create a list for the donut slice colors.
     slice_colors = []
 
+    # Retrieve the assigned color for each expense category.
     for category_name in chart_totals.index:
 
         category_color = expense_category_color_map[category_name]
         slice_colors.append(category_color)
 
+    # Format the percentage and amount displayed inside each donut slice.
     def format_slice_label(percentage):
 
+        # Hide labels belonging to slices below the visibility threshold.
         if percentage < minimum_visible_percentage:
             return ""
 
+        # Calculate and format the amount represented by the slice.
         slice_amount = (percentage / 100) * total_spending
         return (f"{percentage:.1f}%\n" f"${slice_amount:,.0f}")
 
+    # Create the expense category donut chart.
     expense_wedges, _, slice_texts = category_axis.pie(
     chart_totals.values,
     colors=slice_colors,
@@ -1684,6 +2032,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
     }
     )
 
+    # Display the total spending label in the center of the donut.
     category_axis.text(
     donut_center_x,
     0.08,
@@ -1695,6 +2044,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
     color="darkgray"
     )
 
+    # Display the total spending amount in the center of the donut.
     category_axis.text(
         donut_center_x,
         -0.08,
@@ -1706,6 +2056,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
         color="#1F4E79"
     )
 
+    # Add the expense category legend beside the donut chart.
     category_axis.legend(
         expense_wedges,
         chart_totals.index.tolist(),
@@ -1716,10 +2067,57 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
         fontsize=9
     )
 
-    return expense_wedges, slice_texts
+    # Return the donut slices and their formatted labels.
+    return expense_wedges, slice_texts  
 
 def style_expense_category_pie_chart(category_axis):
-    pass       
+
+     # Define the error message for a missing expense-category chart axis.
+    missing_category_axis_error = "An expense-category chart axis is required."
+    
+
+    # Define the background band and divider styling.
+    background_band_color = "#F4F7FA"
+    divider_color = "black"
+    divider_width = 1.0
+    background_layer = -2
+    divider_layer = 3
+
+    # Confirm that an expense-category chart axis was provided.
+    if category_axis is None:
+        raise ValueError(
+            missing_category_axis_error
+        )
+
+    # Create the background band for the expense-category chart section.
+    background_band = Rectangle(
+        (0, 0),
+        1,
+        1,
+        transform=category_axis.transAxes,
+        facecolor=background_band_color,
+        edgecolor="none",
+        zorder=background_layer
+    )
+
+    # Add the background band to the expense-category chart axis.
+    category_axis.add_patch(
+        background_band
+    )
+
+    # Add a horizontal divider across the top of the chart section.
+    category_axis.plot(
+        [0, 1],
+        [1, 1],
+        transform=category_axis.transAxes,
+        color=divider_color,
+        linewidth=divider_width,
+        zorder=divider_layer,
+        clip_on=False
+    )
+
+    # Finish the function without returning a value.
+    return None
 
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
@@ -1727,16 +2125,19 @@ def style_expense_category_pie_chart(category_axis):
 def create_monthly_income_expense_transaction_chart(transaction_axis,months,income_transaction_counts,
     expense_transaction_counts):
 
-    # CALCULATE the x-axis positions for each month
+        # Calculate the x-axis position for each month.
 
     x_positions = np.arange(len(months))
 
+    # Set the width of each bar and the space between the bars.
     bar_width = 0.15
     bar_gap = 0.07
 
+    # Position the income and expense bars on opposite sides of each month.
     income_transaction_positions = (x_positions - ((bar_width + bar_gap) / 2))
     expense_transaction_positions = (x_positions + ((bar_width + bar_gap) / 2))
 
+    # Create the monthly income transaction bars.
     income_transaction_bars = transaction_axis.bar(
         income_transaction_positions,
         income_transaction_counts,
@@ -1747,6 +2148,7 @@ def create_monthly_income_expense_transaction_chart(transaction_axis,months,inco
         label="Income"
     )
 
+    # Create the monthly expense transaction bars.
     expense_transaction_bars = transaction_axis.bar(
         expense_transaction_positions,
         expense_transaction_counts,
@@ -1757,47 +2159,61 @@ def create_monthly_income_expense_transaction_chart(transaction_axis,months,inco
         label="Expenses"
     )
 
+    # Position the x-axis tick marks and label them with the months.
     transaction_axis.set_xticks(x_positions)
     transaction_axis.set_xticklabels(months)
 
+    # Add the x-axis label, y-axis label, and chart title.
     transaction_axis.set_xlabel("Month")
     transaction_axis.set_ylabel("Transactions")
     transaction_axis.set_title("INCOME vs EXPENSE TRANSACTIONS",fontsize=15, fontweight="bold", color="black")
 
+    # Add the income and expense legend below the chart.
     transaction_axis.legend(loc = "lower center",bbox_to_anchor=(0.1, -0.35),
         ncol=1,fontsize=11,frameon=False, columnspacing = 5)
 
+    # Return the income and expense transaction bar containers.
     return income_transaction_bars, expense_transaction_bars
 
 def style_monthly_income_expense_transaction_chart(transaction_axis,income_transaction_bars,
     expense_transaction_bars):
 
+    # Define the label spacing and additional y-axis space.
     label_offset_percentage = 0.02
     y_axis_expansion = 0.08
 
+    # Retrieve the current lower and upper limits of the y-axis.
     current_ymin, current_ymax = (transaction_axis.get_ylim())
 
+    # Calculate the amount needed to expand the y-axis.
     expansion_amount = (current_ymax * y_axis_expansion)
 
+    # Calculate the new upper limit of the y-axis.
     new_ymax = (current_ymax + expansion_amount)
 
+    # Calculate the vertical space between each bar and its value label.
     label_offset = (current_ymax * label_offset_percentage)
 
+    # Combine the income and expense transaction bars into one list.
     all_transaction_bars = (
         list(income_transaction_bars)
         + list(expense_transaction_bars)
     )
 
+    # Add a formatted transaction count above every bar.
     for transaction_bar in all_transaction_bars:
         bar_height = transaction_bar.get_height()
 
+        # Calculate the horizontal center of the current bar.
         bar_center = (
             transaction_bar.get_x()
             + transaction_bar.get_width() / 2
         )
 
+        # Format the transaction count without decimal places.
         formatted_count = f"{bar_height:,.0f}"
 
+        # Display the transaction count above the bar.
         transaction_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -1808,11 +2224,13 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
             color="black"
         )
 
+    # Expand the y-axis to provide room for the value labels.
     transaction_axis.set_ylim(
         current_ymin,
         new_ymax
     )
 
+    # Add horizontal grid lines to make the values easier to compare.
     transaction_axis.yaxis.grid(
         True,
         linestyle="--",
@@ -1820,14 +2238,17 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
         alpha=0.3
     )
 
+    # Hide the top chart border.
     transaction_axis.spines[
         "top"
     ].set_visible(False)
 
+    # Hide the right chart border.
     transaction_axis.spines[
         "right"
     ].set_visible(False)
 
+    # Create the rounded card surrounding the transaction chart.
     card = FancyBboxPatch(
         (-0.15, -0.32),
         1.17,
@@ -1844,19 +2265,161 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
         zorder=-1
     )
 
+    # Add the rounded card to the chart.
     transaction_axis.add_patch(card)
 
+    # Finish the function without returning a value.
     return None
 # ============================================================
 # TRANSFER CHART FUNCTIONS
 # ============================================================
-def classify_transfer_subtypes(
-    xlsx_file,
-    description_column_name,
-    transfer_rule_map
-):
-    pass
+def classify_transfer_subtypes(xlsx_file,description_column_name,transfer_rule_map):
 
+    invalid_xlsx_file_type_error = "Statement data must be provided as a pandas DataFrame."
+    missing_description_column_error = "The transaction description column could not be found."
+    invalid_transfer_rule_map_error =  "Transfer rules must be provided as a dictionary."
+    incomplete_transfer_rule_map_error = "Transfer rules do not contain all required transfer categories."
+    invalid_identifier_collection_error =  "Transfer identifiers must be provided as a list, tuple, or set."
+    invalid_transfer_identifier_error = "Each transfer identifier must be a nonempty text value."
+
+    owned_account_identifier_key = "Owned account transfer"
+    personal_transfer_identifier_key = "Personal transfer identifiers"
+    unclassified_transfer_identifier_key = "Unclassified transfer identifiers"
+    
+
+    if  not isinstance(xlsx_file,pd.DataFrame):
+        raise TypeError(invalid_xlsx_file_type_error)
+
+    if not description_column_name in xlsx_file.columns:
+        raise ValueError(missing_description_column_error)
+
+    if not isinstance(transfer_rule_map, dict):
+        raise TypeError(invalid_transfer_rule_map_error)
+
+    required_rule_keys = {
+        owned_account_identifier_key,
+        personal_transfer_identifier_key,
+        unclassified_transfer_identifier_key
+    }
+
+    for required_rule_key in required_rule_keys:
+
+        if required_rule_key not in required_rule_keys:
+            raise ValueError(incomplete_transfer_rule_map_error)
+
+        identifier_collection = transfer_rule_map[required_rule_key]
+
+        if not isinstance(identifier_collection, (list, tuple, set)):
+            raise TypeError(invalid_identifier_collection_error)
+
+        for identifier in identifier_collection:
+
+            if not isinstance(identifier,str):
+                raise TypeError(invalid_transfer_identifier_error)
+
+            if identifier.strip == "":
+                raise ValueError(invalid_transfer_identifier_error)
+
+    owned_account_identifiers = transfer_rule_map[owned_account_identifier_key]
+    personal_transfer_identifiers = transfer_rule_map[personal_transfer_identifier_key]
+    unclassified_transfer_identifiers = transfer_rule_map[ unclassified_transfer_identifier_key]
+
+    normalized_descriptions = xlsx_file[description_column_name]
+    normalized_descriptions = (
+    normalized_descriptions
+    .fillna("")
+    .astype(str)
+    .str.strip()
+    .str.lower()
+    )
+
+    owned_account_mask = pd.Series(
+        False,
+        index=xlsx_file.index,
+        dtype="bool"
+    )
+    personal_transfer_mask = pd.Series(
+        False,
+        index=xlsx_file.index,
+        dtype="bool"
+    )
+
+    unclassified_transfer_mask  = pd.Series(
+        False,
+        index=xlsx_file.index,
+        dtype="bool"
+    )
+
+    for identifier in owned_account_identifiers:
+
+        normalized_identifier = identifier.strip().lower()
+
+        current_identifier_mask = normalized_descriptions.str.contains(
+        normalized_identifier,
+        regex=False,
+        na=False
+    )
+
+        owned_account_mask = (
+        owned_account_mask | current_identifier_mask
+    )
+
+    for identifier in personal_transfer_identifiers:
+
+        normalized_identifier = identifier.strip().lower()
+
+        current_identifier_mask = (
+            normalized_descriptions.str.contains(
+                normalized_identifier,
+                regex=False,
+                na=False
+            )
+        )
+
+        personal_transfer_mask = (
+            personal_transfer_mask | current_identifier_mask
+        )
+
+    for identifier in unclassified_transfer_identifiers:
+
+        normalized_identifier = identifier.strip().lower()
+
+        
+        current_identifier_mask = (
+            normalized_descriptions.str.contains(
+                normalized_identifier,
+                regex=False,
+                na=False
+            )
+        )
+
+        unclassified_transfer_mask = (
+            unclassified_transfer_mask
+            | current_identifier_mask
+        )
+
+        transfer_subtypes = pd.Series(
+            not_a_transfer,
+            index=xlsx_file.index,
+            dtype="object"
+        )
+
+        transfer_subtypes.loc[
+            owned_account_mask
+        ] = owned_account_transfer
+
+        transfer_subtypes.loc[
+            personal_transfer_mask
+            & ~owned_account_mask
+        ] = personal_transfer
+
+        transfer_subtypes.loc[
+            unclassified_transfer_mask
+            & ~owned_account_mask
+            & ~personal_transfer_mask
+        ] = unclassified_transfer
+
+    return transfer_subtypes
 def create_monthly_transfer_chart(
     transfer_axis,
     months,
@@ -1876,40 +2439,55 @@ def style_monthly_transfer_chart(
 # ============================================================
 def round_bar_tops(chart_axis, bars,):
 
+        # Define the vertical and horizontal rounding proportions.
     vertical_radius_percentage = 0.02
     horizontal_radius_percentage = 0.25
+
+    # Retrieve the current lower and upper limits of the y-axis.
     current_y_min, current_y_max = chart_axis.get_ylim()
 
+    # Calculate the complete visible range of the y-axis.
     y_axis_range = current_y_max - current_y_min
 
+    # Replace each standard bar with a custom rounded bar.
     for bar in bars:
 
+        # Retrieve the current bar's position and dimensions.
         bar_x = bar.get_x()
         bar_y = bar.get_y()
         bar_width = bar.get_width()
         bar_height = bar.get_height()
 
+        # Skip bars that do not have a positive height.
         if bar_height <= 0:
             continue
 
+        # Calculate the horizontal radius using the bar's width.
         horizontal_radius = (
             bar_width * horizontal_radius_percentage
         )
 
+        # Calculate the vertical radius using the visible y-axis range.
         calculated_vertical_radius = (
             y_axis_range * vertical_radius_percentage
         )
 
+        # Limit the vertical radius to half of the bar's height.
         maximum_vertical_radius = bar_height / 2
 
+        # Use the calculated radius when it fits within the bar.
         if calculated_vertical_radius < maximum_vertical_radius:
             vertical_radius = calculated_vertical_radius
+
+        # Use the maximum radius when the calculated radius is too large.
         else:
             vertical_radius = maximum_vertical_radius
 
+        # Preserve the original bar's color and layer position.
         bar_color = bar.get_facecolor()
         bar_zorder = bar.get_zorder()
 
+        # Define the points used to construct the rounded bar shape.
         path_vertices = [
             (bar_x, bar_y),
 
@@ -1959,6 +2537,7 @@ def round_bar_tops(chart_axis, bars,):
             )
         ]
 
+        # Define how the path moves between the rounded bar's points.
         path_codes = [
             MplPath.MOVETO,
             MplPath.LINETO,
@@ -1972,11 +2551,13 @@ def round_bar_tops(chart_axis, bars,):
             MplPath.CLOSEPOLY
         ]
 
+        # Create the path representing the rounded bar.
         rounded_bar_path = MplPath(
             path_vertices,
             path_codes
         )
 
+        # Create the visible patch using the rounded bar path.
         rounded_bar = PathPatch(
             rounded_bar_path,
             facecolor=bar_color,
@@ -1984,12 +2565,15 @@ def round_bar_tops(chart_axis, bars,):
             zorder=bar_zorder
         )
 
+        # Hide the original rectangular bar.
         bar.set_visible(False)
 
+        # Add the rounded replacement bar to the chart.
         chart_axis.add_patch(
             rounded_bar
         )
 
+    # Finish the function without returning a value.
     return None
 # ============================================================
 # REPORT CREATION FUNCTIONS
@@ -2009,23 +2593,27 @@ def create_financial_report(
     expense_category_totals
 ):
 
+     # Determine the financial health status and savings rate.
     financial_health, savings_rate = determine_financial_health(
         total_income,
         total_expenses
     )
 
-    # Create report
+    # Create the financial report figure.
 
     report_figure = plt.figure(figsize=(14, 11))
 
+    # Format the beginning and ending dates for the report.
     formatted_start_date = start_date.strftime("%B %d, %Y")
     formatted_end_date = end_date.strftime("%B %d, %Y")
 
+    # Create the reporting-period text.
     report_period = (
         f"Reporting Period: "
         f"{formatted_start_date} - {formatted_end_date}"
     )
 
+    # Add the program title at the top of the report.
     report_figure.suptitle(
         program_title,
         fontsize=23,
@@ -2033,6 +2621,7 @@ def create_financial_report(
         color="Black"
     )
 
+    # Display the reporting period below the program title.
     report_figure.text(
         0.5,
         0.9,
@@ -2041,45 +2630,56 @@ def create_financial_report(
         fontsize=15
     )
 
+    # Create the grid used to organize the report sections.
     report_layout = report_figure.add_gridspec(
         5,
         2,
         height_ratios=[0.2, 1.0, 0.35, 1.6, 1.8]
     )
 
+    # Create the axis for the financial summary banner.
     banner_axis = report_figure.add_subplot(
         report_layout[0, :]
     )
 
+    # Create the axis for the financial summary table.
     financial_summary = report_figure.add_subplot(
         report_layout[1, :]
     )
 
+    # Create the axis for the financial health summary.
     financial_health_axis = report_figure.add_subplot(
         report_layout[2, :]
     )
 
+    # Create the axis for the monthly income and expense chart.
     income_axis = report_figure.add_subplot(
         report_layout[3, 0]
     )
 
+    # Create the axis for the monthly transaction chart.
     transaction_axis = report_figure.add_subplot(
         report_layout[3, 1]
     )
 
+    # Create the axis for the expense category chart.
     category_axis = report_figure.add_subplot(
         report_layout[4, :]
     )
 
+    # Hide the financial summary axis lines and tick marks.
     financial_summary.axis("off")
 
+    # Set the background color of the financial summary banner.
     banner_axis.set_facecolor(
         "darkblue"
     )
 
+    # Remove the banner's x-axis and y-axis tick marks.
     banner_axis.set_xticks([])
     banner_axis.set_yticks([])
 
+    # Add the financial summary title to the banner.
     banner_axis.text(
         0.5,
         0.5,
@@ -2091,6 +2691,7 @@ def create_financial_report(
         color="white"
     )
 
+    # Prepare the values displayed in the financial summary table.
     financial_summary_data = [
         ["Transactions", transaction_count],
         ["Total Income", f"${total_income:,.2f}"],
@@ -2098,22 +2699,26 @@ def create_financial_report(
         ["Net Balance", f"${net_balance:,.2f}"]
     ]
 
+    # Create the financial summary table.
     financial_table = financial_summary.table(
         cellText=financial_summary_data,
         colLabels=["Category", "Amount"],
         loc="center"
     )
 
+    # Apply the financial table styling.
     style_financial_table(
         financial_table
     )
 
+    # Create the financial health summary.
     create_financial_health_summary(
         financial_health_axis,
         financial_health,
         savings_rate
     )
 
+    # Create the monthly income and expense chart.
     income_bars, expense_bars = (
         create_monthly_income_expenses_chart(
             income_axis,
@@ -2123,12 +2728,14 @@ def create_financial_report(
         )
     )
 
+    # Apply the monthly income and expense chart styling.
     style_monthly_income_expenses_chart(
         income_axis,
         income_bars,
         expense_bars
     )
 
+    # Create the monthly income and expense transaction chart.
     (
         income_transaction_bars,
         expense_transaction_bars
@@ -2139,33 +2746,38 @@ def create_financial_report(
         expense_transaction_counts
     )
 
-    
+    # Apply the monthly transaction chart styling.
     style_monthly_income_expense_transaction_chart(
         transaction_axis,
         income_transaction_bars,
         expense_transaction_bars
     )
 
+    # Round the tops of the monthly income bars.
     round_bar_tops(
         income_axis,
         income_bars
     )
 
+    # Round the tops of the monthly expense bars.
     round_bar_tops(
         income_axis,
         expense_bars
     )
 
+    # Round the tops of the income transaction bars.
     round_bar_tops(
         transaction_axis,
         income_transaction_bars
     )
 
+    # Round the tops of the expense transaction bars.
     round_bar_tops(
         transaction_axis,
         expense_transaction_bars
     )
 
+    # Adjust the spacing between the report sections.
     report_figure.subplots_adjust(
         top=0.84,
         bottom=0.18,
@@ -2173,6 +2785,7 @@ def create_financial_report(
         wspace=0.30
     )
 
+    # Create the expense category donut chart.
     expense_wedges, slice_texts = (
         create_expense_category_pie_chart(
             category_axis,
@@ -2181,15 +2794,22 @@ def create_financial_report(
         )
     )
 
+    style_expense_category_pie_chart(
+        category_axis
+    )
+
+    # Adjust the final spacing around the completed report.
     report_figure.subplots_adjust(
         top=0.84,
-        bottom=0.08,
-        hspace=0.40,
+        bottom=0.06,
+        hspace=0.55,
         wspace=0.30
     )
 
+    # Display the completed financial report.
     plt.show()
 
+    # Return the completed report figure.
     return report_figure
 
 def create_financial_insights_summary(
@@ -2202,52 +2822,65 @@ def create_financial_insights_summary(
 # ============================================================
 def save_financial_report(report_figure):
 
+    # Define the prompts and messages used during the save process.
     chart_prompt = "Would you like to save this chart as an image? (Y/N): "
     invalid_save_choice_message = "The input is invalid."
     chart_saved_successfully_message = "Charts have been saved successfully."
     none_error = "Must Enter A Valid Input."
     file_name_prompt = "Please Enter The File Name: "
 
+    # Continue asking until the user provides a valid save choice.
     while True:
 
+        # Ask the user whether the financial report should be saved.
         save_choice = input(chart_prompt)
 
+        # Begin the save process when the user enters Y.
         if save_choice.upper() == "Y":
 
+            # Continue asking until the user provides a valid file name.
             while True:
 
+                # Ask for the file name and remove surrounding spaces.
                 file_name = input(file_name_prompt)
                 file_name = file_name.strip()
 
+                # Display an error when the user enters an empty file name.
                 if file_name == "":
                     print(none_error)
                     continue
 
+                # Create and save the financial report image.
                 else:
                     financial_report_file_name = (
                         file_name + "_financial_report.png"
                     )
 
+                    # Save the report figure using the completed file name.
                     report_figure.savefig(
                         financial_report_file_name
                     )
 
+                    # Confirm that the financial report was saved.
                     print(
                         chart_saved_successfully_message
                     )
 
+                    # Finish the function after saving the report.
                     return
 
+        # End the save process without saving when the user enters N.
         elif save_choice.upper() == "N":
             break
 
+        # Display an error when the user enters an unsupported choice.
         else:
             print(
                 invalid_save_choice_message
             )
 
+    # Finish the function without saving the report.
     return
-
 def export_financial_data(
     combined_transactions,
     financial_summary,
@@ -2260,41 +2893,52 @@ def export_financial_data(
 # ============================================================
 def main():
 
+       # Display the program's welcome screen.
         display_welcome_screen()
 
+        # Open the file dialog and retrieve the selected statement file.
         selected_file = select_xlsx_file()
 
+        # Stop the program when the user does not select a file.
         if selected_file is None:
             print(no_file_selected_error)
             return
 
+        # Attempt to process the statement and create the financial report.
         try:
+            # Validate the selected statement file.
             xlsx_path = validate_xlsx_file(
                 selected_file
             )
 
+            # Open the validated statement file.
             xlsx_file = open_xlsx(
                 xlsx_path
             )
 
+            # Stop the program when the statement cannot be opened.
             if xlsx_file is None:
                 return
 
+            # Identify the column containing the transaction dates.
             date_column_name = identify_date_column(
                 xlsx_file
             )
 
+            # Identify the column containing the transaction descriptions.
             description_column_name = (
                 identify_description_column(
                     xlsx_file
                 )
             )
 
+            # Determine the beginning and ending dates of the statement.
             start_date, end_date = determine_date_range(
                 xlsx_file,
                 date_column_name
             )
 
+            # Calculate the primary financial totals and classify the transactions.
             (
                 transaction_count,
                 total_income,
@@ -2307,24 +2951,30 @@ def main():
                 description_column_name
             )
 
+            # Create an empty collection for user-provided account identifiers.
             user_owned_account_identifiers = []
 
+            # Create the rules used to identify transfer subtypes.
             transfer_rule_map = create_transfer_rule_map(
                 user_owned_account_identifiers
             )
 
+            # Classify the transfer subtype of each transaction.
             transfer_subtypes = classify_transfer_subtypes(
                 xlsx_file,
                 description_column_name,
                 transfer_rule_map
             )
 
+            # Use the default category identifiers.
             user_category_identifiers = None
 
+            # Create the rules used to categorize transactions.
             category_rule_map = create_category_rule_map(
                 user_category_identifiers
             )
 
+            # Assign a financial category to each transaction.
             transaction_categories = (
                 categorize_transactions(
                     xlsx_file,
@@ -2335,6 +2985,7 @@ def main():
                 )
             )
 
+            # Calculate the monthly financial totals and transaction counts.
             (
                 months,
                 income_totals,
@@ -2348,6 +2999,7 @@ def main():
                 transaction_types
             )
 
+            # Calculate the income and expense totals for each category.
             (
                 income_category_totals,
                 expense_category_totals
@@ -2357,6 +3009,7 @@ def main():
                 transaction_categories
             )
 
+            # Create the completed financial report.
             report_figure = create_financial_report(
                 transaction_count,
                 start_date,
@@ -2372,13 +3025,14 @@ def main():
                 expense_category_totals
             )
 
+            # Ask the user whether the financial report should be saved.
             save_financial_report(
                 report_figure
             )
 
+        # Display a user-friendly message when an error occurs.
         except Exception as error:
             print(error)
-
 
 if __name__ == "__main__":
     main()
