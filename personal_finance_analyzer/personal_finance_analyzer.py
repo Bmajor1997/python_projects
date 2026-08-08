@@ -1887,7 +1887,8 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
     center_label_txt = "TOTAL SPENDING"
     minimum_visible_percentage = 3
     donut_start_angle = 90
-    donut_ring_width = 0.38
+    donut_ring_width = 0.55
+    donut_radius = 1.4
     donut_center_x = -0.2
 
     # Define the expense categories that the chart supports.
@@ -1906,15 +1907,15 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
 
     # Assign a chart color to each displayed expense category.
     expense_category_color_map = {
-        housing_category: "#1F4E79",
-        utilities_category: "#B35C00",
-        healthcare_category: "#8B1E3F",
-        transportation_category: "#006D77",
-        groceries_category: "#2E6B3A",
-        dining_category: "#8A6D00",
-        entertainment_category: "#5B3F8C",
-        shopping_category: "#8C3A5B",
-        other_expense_category: "#4A4A4A"
+        housing_category: "blue",
+        utilities_category: "orange",
+        healthcare_category: "red",
+        transportation_category: "deepskyblue",
+        groceries_category: "limegreen",
+        dining_category: "goldenrod",
+        entertainment_category: "purple",
+        shopping_category: "deeppink",
+        other_expense_category: "gray"
     }
 
     # Confirm that the category totals are provided as a pandas Series.
@@ -2018,6 +2019,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
     colors=slice_colors,
     startangle=donut_start_angle,
     counterclock=False,
+    radius=donut_radius,
     center=(donut_center_x, 0),
     autopct=format_slice_label,
     pctdistance=0.80,
@@ -2028,7 +2030,8 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
     },
     textprops={
         "color": "white",
-        "fontweight": "bold"
+        "fontweight": "bold",
+        "fontsize": 8
     }
     )
 
@@ -2061,7 +2064,7 @@ def create_expense_category_pie_chart(category_axis,category_totals,chart_title)
         expense_wedges,
         chart_totals.index.tolist(),
         loc="center left",
-        bbox_to_anchor=(0.88, 0.5),
+        bbox_to_anchor=(1.05, 0.5),
         ncol=1,
         frameon=False,
         fontsize=9
@@ -2076,11 +2079,10 @@ def style_expense_category_pie_chart(category_axis):
     missing_category_axis_error = "An expense-category chart axis is required."
     
 
-    # Define the background band and divider styling.
-    background_band_color = "#F4F7FA"
+    # Define the divider styling.
+   
     divider_color = "black"
     divider_width = 1.0
-    background_layer = -2
     divider_layer = 3
 
     # Confirm that an expense-category chart axis was provided.
@@ -2088,22 +2090,6 @@ def style_expense_category_pie_chart(category_axis):
         raise ValueError(
             missing_category_axis_error
         )
-
-    # Create the background band for the expense-category chart section.
-    background_band = Rectangle(
-        (0, 0),
-        1,
-        1,
-        transform=category_axis.transAxes,
-        facecolor=background_band_color,
-        edgecolor="none",
-        zorder=background_layer
-    )
-
-    # Add the background band to the expense-category chart axis.
-    category_axis.add_patch(
-        background_band
-    )
 
     # Add a horizontal divider across the top of the chart section.
     category_axis.plot(
@@ -2601,7 +2587,7 @@ def create_financial_report(
 
     # Create the financial report figure.
 
-    report_figure = plt.figure(figsize=(14, 11))
+    report_figure = plt.figure(figsize=(14, 14))
 
     # Format the beginning and ending dates for the report.
     formatted_start_date = start_date.strftime("%B %d, %Y")
@@ -2632,9 +2618,9 @@ def create_financial_report(
 
     # Create the grid used to organize the report sections.
     report_layout = report_figure.add_gridspec(
-        5,
+        6,
         2,
-        height_ratios=[0.2, 1.0, 0.35, 1.6, 1.8]
+        height_ratios=[0.2, 1.0, 0.35, 1.6, 0.18, 2.2]
     )
 
     # Create the axis for the financial summary banner.
@@ -2662,10 +2648,18 @@ def create_financial_report(
         report_layout[3, 1]
     )
 
-    # Create the axis for the expense category chart.
-    category_axis = report_figure.add_subplot(
+   # Create the full-width axis for the category-section divider.
+    category_divider_axis = report_figure.add_subplot(
         report_layout[4, :]
     )
+
+    # Create the axis for the expense category chart.
+    category_axis = report_figure.add_subplot(
+        report_layout[5, 0]
+    )
+
+    # Hide the divider axis.
+    category_divider_axis.axis("off")
 
     # Hide the financial summary axis lines and tick marks.
     financial_summary.axis("off")
@@ -2780,8 +2774,8 @@ def create_financial_report(
     # Adjust the spacing between the report sections.
     report_figure.subplots_adjust(
         top=0.84,
-        bottom=0.18,
-        hspace=0.20,
+        bottom=0.06,
+        hspace=0.55,
         wspace=0.30
     )
 
@@ -2792,10 +2786,6 @@ def create_financial_report(
             expense_category_totals,
             "EXPENSES BY CATEGORY"
         )
-    )
-
-    style_expense_category_pie_chart(
-        category_axis
     )
 
     # Adjust the final spacing around the completed report.
