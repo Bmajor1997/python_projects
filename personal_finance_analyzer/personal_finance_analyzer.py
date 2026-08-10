@@ -15,7 +15,6 @@ import numpy as np
 # ============================================================
 # APPLICATION INFORMATIONS
 # ============================================================
-application_version = "Beta version 2.0"
 program_title = "Financial Insights Report"
 # ============================================================
 # USER INTERFACES
@@ -106,7 +105,6 @@ def display_welcome_screen():
     # Display the application header.
     print(divider)
     print(program_title)
-    print(application_version)
     print(divider)
 
     # Display the welcome message.
@@ -1569,8 +1567,6 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         outgoing_transfer_counts
     )
 
-def calculate_monthly_transfer_summary(xlsx_file,date_column_name,amount_values,transaction_types,category_rule_map):
-    pass
 # ============================================================
 # AI FINANCIAL INSIGHT FUNCTIONS
 # ============================================================
@@ -2198,7 +2194,7 @@ def style_monthly_income_expense_transaction_chart(
 
     # Pair each bar collection with a readable label color.
     bar_groups = (
-        (income_transaction_bars, "black"),
+        (income_transaction_bars, "white"),
         (expense_transaction_bars, "white"),
         (incoming_transfer_bars, "white"),
         (outgoing_transfer_bars, "white")
@@ -2747,56 +2743,63 @@ def create_financial_report(
         outgoing_transfer_bars
     )
 
-    # Round the tops of the monthly income bars.
     round_bar_tops(
         income_axis,
         income_bars
     )
 
-    # Round the tops of the monthly expense bars.
     round_bar_tops(
         income_axis,
         expense_bars
     )
 
-    # Round the tops of the income transaction bars.
-    round_bar_tops(
-        transaction_axis,
-        income_transaction_bars
-    )
-
-    # Round the tops of the expense transaction bars.
-    round_bar_tops(
-        transaction_axis,
-        expense_transaction_bars
-    )
-
-    # Round the tops of the incoming transfer bars.
-    round_bar_tops(
-        transaction_axis,
+    # Round only the top segment of each Income stack.
+    for base_bar, transfer_bar in zip(
+        income_transaction_bars,
         incoming_transfer_bars
-    )
+    ):
+        if transfer_bar.get_height() > 0:
+            round_bar_tops(
+                transaction_axis,
+                [transfer_bar]
+            )
+        else:
+            round_bar_tops(
+                transaction_axis,
+                [base_bar]
+            )
 
-    # Round the tops of the outgoing transfer bars.
-    round_bar_tops(
-        transaction_axis,
+    # Round only the top segment of each Expense stack.
+    for base_bar, transfer_bar in zip(
+        expense_transaction_bars,
         outgoing_transfer_bars
-    )
-    # Adjust the spacing between the report sections.
-    report_figure.subplots_adjust(
-        top=0.84,
-        bottom=0.18,
-        hspace=0.35,
-        wspace=0.30
-    )
+    ):
+        if transfer_bar.get_height() > 0:
+            round_bar_tops(
+                transaction_axis,
+                [transfer_bar]
+            )
+        else:
+            round_bar_tops(
+                transaction_axis,
+                [base_bar]
+            )
+    
+        # Adjust the spacing between the report sections.
+        report_figure.subplots_adjust(
+            top=0.84,
+            bottom=0.18,
+            hspace=0.35,
+            wspace=0.30
+        )
 
-    # Adjust the final spacing around the completed report.
-    report_figure.subplots_adjust(
-        top=0.84,
-        bottom=0.13,
-        hspace=0.55,
-        wspace=0.30
-    )
+        # Adjust the final spacing around the completed report.
+        report_figure.subplots_adjust(
+            top=0.84,
+            bottom=0.13,
+            hspace=0.55,
+            wspace=0.30
+        )
 
     # Display the completed financial report.
     plt.show()
@@ -2804,11 +2807,6 @@ def create_financial_report(
     # Return the completed report figure.
     return report_figure
 
-def create_financial_insights_summary(
-    financial_insights_axis,
-    financial_insights
-):
-    pass
 # ============================================================
 # REPORT EXPORT FUNCTIONS
 # ============================================================
