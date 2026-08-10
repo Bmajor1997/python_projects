@@ -1236,13 +1236,126 @@ def calculate_financial_summary(xlsx_file,description_column_name):
         transaction_types
     )
 
-def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transaction_types):
+def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transaction_types,transfer_subtypes):
 
-       # Combine the dates, amounts, and transaction types into one DataFrame.
+    invalid_xlsx_file_type_error = "Statement data must be provided as a pandas DataFrame."
+    missing_date_column_error = "The transaction date column could not be found."
+    invalid_amount_values_type_error = "Amount values must be provided as a pandas Series."
+    invalid_transaction_types_type_error = "Transaction types must be provided as a pandas Series."
+    invalid_transfer_subtypes_type_error =  "Transfer subtypes must be provided as a pandas Series."
+    misaligned_monthly_data_error = ("Monthly transaction data does not align with " 
+                                     "the statement transactions.")
+    invalid_amount_values_error = "Monthly amount values must contain valid numeric values."
+    invalid_transaction_type_error = "Monthly data contains an unsupported transaction type."
+    invalid_transfer_subtype_error = "Monthly data contains an unsupported transfer subtype."
+    amount_type_mismatch_error = "A transaction amount does not match its transaction type."
+    missing_valid_dates_error = (
+    "No valid transaction dates were found "
+    "for the monthly summary."
+)
+
+
+    # Confirm that the statement data is a DataFrame.
+    if not isinstance(xlsx_file, pd.DataFrame):
+        raise TypeError(
+            invalid_xlsx_file_type_error
+        )
+
+    # Confirm that the requested date column exists.
+    if date_column_name not in xlsx_file.columns:
+        raise ValueError(
+            missing_date_column_error
+        )
+
+    # Confirm that the amount values are a pandas Series.
+    if not isinstance(amount_values, pd.Series):
+        raise TypeError(
+            invalid_amount_values_type_error
+        )
+
+    # Confirm that the transaction types are a pandas Series.
+    if not isinstance(transaction_types, pd.Series):
+        raise TypeError(
+            invalid_transaction_types_type_error
+        )
+
+    # Confirm that the transfer subtypes are a pandas Series.
+    if not isinstance(transfer_subtypes, pd.Series):
+        raise TypeError(
+            invalid_transfer_subtypes_type_error
+        )
+
+    # Confirm that all monthly data uses the statement index.
+    if (
+        not amount_values.index.equals(xlsx_file.index)
+        or not transaction_types.index.equals(xlsx_file.index)
+        or not transfer_subtypes.index.equals(xlsx_file.index)
+    ):
+        raise ValueError(
+            misaligned_monthly_data_error
+        )
+
+    approved_transaction_types = {
+    income_transaction_type,
+    expense_transaction_type,
+    zero_amount_transaction_type
+}
+
+    # Confirm that all amount values are present and numeric.
+    if (
+        amount_values.isna().any()
+        or not pd.api.types.is_numeric_dtype(amount_values)
+    ):
+        raise ValueError(
+            invalid_amount_values_error
+        )
+
+    # Confirm that every transaction type is approved.
+    if (
+        transaction_types.isna().any()
+        or not transaction_types.isin(
+            approved_transaction_types
+        ).all()
+    ):
+        raise ValueError(
+            invalid_transaction_type_error
+        )
+
+    # Confirm that Income transactions contain positive amounts.
+    if (
+        amount_values[
+            transaction_types == income_transaction_type
+        ] <= 0
+    ).any():
+        raise ValueError(
+            amount_type_mismatch_error
+        )
+
+    # Confirm that Expense transactions contain negative amounts.
+    if (
+        amount_values[
+            transaction_types == expense_transaction_type
+        ] >= 0
+    ).any():
+        raise ValueError(
+            amount_type_mismatch_error
+        )
+
+    # Confirm that Zero Amount transactions contain zero.
+    if (
+        amount_values[
+            transaction_types == zero_amount_transaction_type
+        ] != 0
+    ).any():
+        raise ValueError(
+            amount_type_mismatch_error
+        )   
+    # Combine the dates, amounts, and transaction types into one DataFrame.
     monthly_data = pd.DataFrame({
         "date": xlsx_file[date_column_name],
         "amount": amount_values,
-        "transaction_type": transaction_types
+        "transaction_type": transaction_types,
+        "transfer_subtype": transfer_subtypes
     })
 
     # Convert the statement dates into pandas datetime values.
@@ -1251,14 +1364,25 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         errors="coerce"
     )
 
-    # Remove transactions with missing dates, amounts, or transaction types.
+    # Confirm that at least one usable transaction date exists.
+    if monthly_data["date"].isna().all():
+        raise ValueError(
+            missing_valid_dates_error
+        )
+
+   # Remove transactions with missing monthly calculation data.
     monthly_data = monthly_data.dropna(
-        subset=["date", "amount", "transaction_type"]
+        subset=[
+            "date",
+            "amount",
+            "transaction_type",
+            "transfer_subtype"
+        ]
     )
 
-    # Extract the month name from each transaction date.
+    # Create the year-month value used to group transactions.
     monthly_data["month"] = (
-        monthly_data["date"].dt.month_name()
+        monthly_data["date"].dt.to_period("M")
     )
 
     # Select the transactions classified as income.
@@ -1293,14 +1417,15 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         monthly_expenses.groupby("month").size()
     )
 
-    # Count all transactions in each month.
+    # Count all transactions in each month and sort them chronologically.
     monthly_transactions = (
-        monthly_data.groupby("month").size()
+        monthly_data.groupby("month").size().sort_index()
     )
 
     # Retrieve the months that contain transaction data.
     months = monthly_transactions.index
 
+   
     # Align the monthly income totals with the complete month list.
     monthly_income_totals = (
         monthly_income_totals.reindex(
@@ -1333,33 +1458,75 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         )
     )
 
-    # Confirm that every month contains income and expense transactions.
-    for month_name in months:
+    # Define the transfer subtypes included in monthly transfer counts.
+    recognized_transfer_subtypes = {
+        personal_transfer,
+        owned_account_transfer,
+        unclassified_transfer
+    }
 
-        # Stop the calculation when a month has no income transactions.
-        if (
-            monthly_income_transaction_counts.loc[
-                month_name
-            ] == 0
-        ):
-            raise ValueError(
-                "Monthly transaction data is incomplete: "
-                f"{month_name} has no income transactions."
-            )
+    # Select Income transactions identified as transfers.
+    incoming_transfers = monthly_income[
+        monthly_income["transfer_subtype"].isin(
+            recognized_transfer_subtypes
+        )
+    ]
 
-        # Stop the calculation when a month has no expense transactions.
-        if (
-            monthly_expense_transaction_counts.loc[
-                month_name
-            ] == 0
-        ):
-            raise ValueError(
-                "Monthly transaction data is incomplete: "
-                f"{month_name} has no expense transactions."
-            )
+    # Select Expense transactions identified as transfers.
+    outgoing_transfers = monthly_expenses[
+        monthly_expenses["transfer_subtype"].isin(
+            recognized_transfer_subtypes
+        )
+    ]
 
-    # Convert the month index into a list.
-    months = months.tolist()
+    # Count the incoming transfer transactions in each month.
+    monthly_incoming_transfer_counts = (
+        incoming_transfers.groupby("month").size()
+    )
+
+    # Count the outgoing transfer transactions in each month.
+    monthly_outgoing_transfer_counts = (
+        outgoing_transfers.groupby("month").size()
+    )
+
+    # Align the incoming transfer counts with the complete month list.
+    monthly_incoming_transfer_counts = (
+        monthly_incoming_transfer_counts.reindex(
+            months,
+            fill_value=0
+        )
+    )
+
+    # Align the outgoing transfer counts with the complete month list.
+    monthly_outgoing_transfer_counts = (
+        monthly_outgoing_transfer_counts.reindex(
+            months,
+            fill_value=0
+        )
+    )
+
+    # Confirm that incoming transfers do not exceed Income transactions.
+    if (
+        monthly_incoming_transfer_counts
+        > monthly_income_transaction_counts
+    ).any():
+        raise ValueError(
+            "A monthly incoming transfer count exceeds "
+            "the total Income transaction count."
+        )
+
+    # Confirm that outgoing transfers do not exceed Expense transactions.
+    if (
+        monthly_outgoing_transfer_counts
+        > monthly_expense_transaction_counts
+    ).any():
+        raise ValueError(
+            "A monthly outgoing transfer count exceeds "
+            "the total Expense transaction count."
+        )
+
+   # Convert the internal year-month values into display month names.
+    months = months.strftime("%B").tolist()
 
     # Convert the monthly income totals into a list.
     income_totals = (
@@ -1381,13 +1548,25 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         monthly_expense_transaction_counts.tolist()
     )
 
+    # Convert the monthly incoming transfer counts into a list.
+    incoming_transfer_counts = (
+        monthly_incoming_transfer_counts.tolist()
+    )
+
+    # Convert the monthly outgoing transfer counts into a list.
+    outgoing_transfer_counts = (
+        monthly_outgoing_transfer_counts.tolist()
+    )
+
     # Return the monthly totals and transaction counts.
     return (
         months,
         income_totals,
         expense_totals,
         income_transaction_counts,
-        expense_transaction_counts
+        expense_transaction_counts,
+        incoming_transfer_counts,
+        outgoing_transfer_counts
     )
 
 def calculate_monthly_transfer_summary(xlsx_file,date_column_name,amount_values,transaction_types,category_rule_map):
@@ -1857,25 +2036,81 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
 # ============================================================
-def create_monthly_income_expense_transaction_chart(transaction_axis,months,income_transaction_counts,
-    expense_transaction_counts):
+def create_monthly_income_expense_transaction_chart(
+    transaction_axis,
+    months,
+    income_transaction_counts,
+    expense_transaction_counts,
+    incoming_transfer_counts,
+    outgoing_transfer_counts
+):
+    missing_axis_error = "A transaction chart axis is required."
+    empty_months_error = "At least one month is required."
+    misaligned_counts_error = "Transaction counts must match the number of months."
+    invalid_counts_error = "Transaction counts must be nonnegative whole numbers."
+    invalid_transfers_error = "Transfer counts cannot exceed transaction counts."
 
-        # Calculate the x-axis position for each month.
+    if transaction_axis is None:
+        raise ValueError(missing_axis_error)
+
+    if len(months) == 0:
+        raise ValueError(empty_months_error)
+
+    (
+        income_transaction_counts,
+        expense_transaction_counts,
+        incoming_transfer_counts,
+        outgoing_transfer_counts
+    ) = map(np.asarray, (
+        income_transaction_counts,
+        expense_transaction_counts,
+        incoming_transfer_counts,
+        outgoing_transfer_counts
+    ))
+
+    count_collections = (
+        income_transaction_counts,
+        expense_transaction_counts,
+        incoming_transfer_counts,
+        outgoing_transfer_counts
+    )
+
+    if any(len(values) != len(months) for values in count_collections):
+        raise ValueError(misaligned_counts_error)
+
+    for values in count_collections:
+        if (
+            values.ndim != 1
+            or not np.issubdtype(values.dtype, np.number)
+            or not np.isfinite(values).all()
+            or (values < 0).any()
+            or (values % 1 != 0).any()
+        ):
+            raise ValueError(invalid_counts_error)
+
+    if (
+        (incoming_transfer_counts > income_transaction_counts).any()
+        or (outgoing_transfer_counts > expense_transaction_counts).any()
+    ):
+        raise ValueError(invalid_transfers_error)
+
+    non_transfer_income_counts = (
+        income_transaction_counts - incoming_transfer_counts
+    )
+    non_transfer_expense_counts = (
+        expense_transaction_counts - outgoing_transfer_counts
+    )
 
     x_positions = np.arange(len(months))
-
-    # Set the width of each bar and the space between the bars.
     bar_width = 0.15
     bar_gap = 0.07
 
-    # Position the income and expense bars on opposite sides of each month.
-    income_transaction_positions = (x_positions - ((bar_width + bar_gap) / 2))
-    expense_transaction_positions = (x_positions + ((bar_width + bar_gap) / 2))
+    income_positions = x_positions - ((bar_width + bar_gap) / 2)
+    expense_positions = x_positions + ((bar_width + bar_gap) / 2)
 
-    # Create the monthly income transaction bars.
     income_transaction_bars = transaction_axis.bar(
-        income_transaction_positions,
-        income_transaction_counts,
+        income_positions,
+        non_transfer_income_counts,
         width=bar_width,
         color="limegreen",
         alpha=1.0,
@@ -1883,10 +2118,9 @@ def create_monthly_income_expense_transaction_chart(transaction_axis,months,inco
         label="Income"
     )
 
-    # Create the monthly expense transaction bars.
     expense_transaction_bars = transaction_axis.bar(
-        expense_transaction_positions,
-        expense_transaction_counts,
+        expense_positions,
+        non_transfer_expense_counts,
         width=bar_width,
         color="red",
         alpha=1.0,
@@ -1894,78 +2128,121 @@ def create_monthly_income_expense_transaction_chart(transaction_axis,months,inco
         label="Expenses"
     )
 
-    # Position the x-axis tick marks and label them with the months.
-    transaction_axis.set_xticks(x_positions)
-    transaction_axis.set_xticklabels(months)
+    has_transfers = (
+        (incoming_transfer_counts > 0).any()
+        or (outgoing_transfer_counts > 0).any()
+    )
+    transfer_label = "Transfers" if has_transfers else "_nolegend_"
 
-    # Add the x-axis label, y-axis label, and chart title.
-    transaction_axis.set_xlabel("Month")
-    transaction_axis.set_ylabel("Transactions")
-    transaction_axis.set_title("INCOME vs EXPENSE TRANSACTIONS",fontsize=15, fontweight="bold", color="black")
-
-    # Add the income and expense legend below the chart.
-    transaction_axis.legend(loc = "lower center",bbox_to_anchor=(0.1, -0.35),
-        ncol=1,fontsize=11,frameon=False, columnspacing = 5)
-
-    # Return the income and expense transaction bar containers.
-    return income_transaction_bars, expense_transaction_bars
-
-def style_monthly_income_expense_transaction_chart(transaction_axis,income_transaction_bars,
-    expense_transaction_bars):
-
-    # Define the label spacing and additional y-axis space.
-    label_offset_percentage = 0.02
-    y_axis_expansion = 0.08
-
-    # Retrieve the current lower and upper limits of the y-axis.
-    current_ymin, current_ymax = (transaction_axis.get_ylim())
-
-    # Calculate the amount needed to expand the y-axis.
-    expansion_amount = (current_ymax * y_axis_expansion)
-
-    # Calculate the new upper limit of the y-axis.
-    new_ymax = (current_ymax + expansion_amount)
-
-    # Calculate the vertical space between each bar and its value label.
-    label_offset = (current_ymax * label_offset_percentage)
-
-    # Combine the income and expense transaction bars into one list.
-    all_transaction_bars = (
-        list(income_transaction_bars)
-        + list(expense_transaction_bars)
+    incoming_transfer_bars = transaction_axis.bar(
+        income_positions,
+        incoming_transfer_counts,
+        width=bar_width,
+        bottom=non_transfer_income_counts,
+        color="blue",
+        alpha=1.0,
+        zorder=3,
+        label=transfer_label
     )
 
-    # Add a formatted transaction count above every bar.
-    for transaction_bar in all_transaction_bars:
-        bar_height = transaction_bar.get_height()
+    outgoing_transfer_bars = transaction_axis.bar(
+        expense_positions,
+        outgoing_transfer_counts,
+        width=bar_width,
+        bottom=non_transfer_expense_counts,
+        color="blue",
+        alpha=1.0,
+        zorder=3,
+        label="_nolegend_"
+    )
 
-        # Calculate the horizontal center of the current bar.
-        bar_center = (
-            transaction_bar.get_x()
-            + transaction_bar.get_width() / 2
-        )
+    transaction_axis.set_xticks(x_positions)
+    transaction_axis.set_xticklabels(months)
+    transaction_axis.set_xlabel("Month")
+    transaction_axis.set_ylabel("Transactions")
+    transaction_axis.set_title(
+        "INCOME vs EXPENSE TRANSACTIONS",
+        fontsize=15,
+        fontweight="bold",
+        color="black"
+    )
+    transaction_axis.legend(
+        loc="lower center",
+        bbox_to_anchor=(0.1, -0.35),
+        ncol=1,
+        fontsize=11,
+        frameon=False
+    )
 
-        # Format the transaction count without decimal places.
-        formatted_count = f"{bar_height:,.0f}"
+    return (
+        income_transaction_bars,
+        expense_transaction_bars,
+        incoming_transfer_bars,
+        outgoing_transfer_bars
+    )
+    
+def style_monthly_income_expense_transaction_chart(
+    transaction_axis,
+    income_transaction_bars,
+    expense_transaction_bars,
+    incoming_transfer_bars,
+    outgoing_transfer_bars
+):
 
-        # Display the transaction count above the bar.
-        transaction_axis.text(
-            bar_center,
-            bar_height + label_offset,
-            formatted_count,
-            ha="center",
-            va="bottom",
-            fontsize=9,
-            color="black"
-        )
+    # Define the additional y-axis space.
+    y_axis_expansion = 0.08
 
-    # Expand the y-axis to provide room for the value labels.
+    # Retrieve and expand the current y-axis limits.
+    current_ymin, current_ymax = transaction_axis.get_ylim()
+    new_ymax = current_ymax * (1 + y_axis_expansion)
+
+    # Pair each bar collection with a readable label color.
+    bar_groups = (
+        (income_transaction_bars, "black"),
+        (expense_transaction_bars, "white"),
+        (incoming_transfer_bars, "white"),
+        (outgoing_transfer_bars, "white")
+    )
+
+    # Display each nonzero segment's count inside that segment.
+    for transaction_bars, label_color in bar_groups:
+
+        for transaction_bar in transaction_bars:
+
+            bar_height = transaction_bar.get_height()
+
+            if bar_height <= 0:
+                continue
+
+            bar_center = (
+                transaction_bar.get_x()
+                + transaction_bar.get_width() / 2
+            )
+
+            label_y_position = (
+                transaction_bar.get_y()
+                + bar_height / 2
+            )
+
+            transaction_axis.text(
+                bar_center,
+                label_y_position,
+                f"{bar_height:,.0f}",
+                ha="center",
+                va="center",
+                fontsize=9,
+                fontweight="bold",
+                color=label_color,
+                zorder=4
+            )
+
+    # Expand the y-axis to provide room above the bars.
     transaction_axis.set_ylim(
         current_ymin,
         new_ymax
     )
 
-    # Add horizontal grid lines to make the values easier to compare.
+    # Add horizontal grid lines.
     transaction_axis.yaxis.grid(
         True,
         linestyle="--",
@@ -1973,17 +2250,11 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
         alpha=0.3
     )
 
-    # Hide the top chart border.
-    transaction_axis.spines[
-        "top"
-    ].set_visible(False)
+    # Hide the top and right chart borders.
+    transaction_axis.spines["top"].set_visible(False)
+    transaction_axis.spines["right"].set_visible(False)
 
-    # Hide the right chart border.
-    transaction_axis.spines[
-        "right"
-    ].set_visible(False)
-
-    # Create the rounded card surrounding the transaction chart.
+    # Create the rounded card surrounding the chart.
     card = FancyBboxPatch(
         (-0.15, -0.32),
         1.17,
@@ -2003,7 +2274,6 @@ def style_monthly_income_expense_transaction_chart(transaction_axis,income_trans
     # Add the rounded card to the chart.
     transaction_axis.add_patch(card)
 
-    # Finish the function without returning a value.
     return None
 # ============================================================
 # TRANSFER CHART FUNCTIONS
@@ -2155,13 +2425,6 @@ def classify_transfer_subtypes(xlsx_file,description_column_name,transfer_rule_m
         ] = unclassified_transfer
 
     return transfer_subtypes
-def create_monthly_transfer_chart(
-    transfer_axis,
-    months,
-    transfer_totals,
-    transfer_counts
-):
-    pass
 
 # ============================================================
 # SHARED CHART STYLING FUNCTIONS
@@ -2319,7 +2582,8 @@ def create_financial_report(
     expense_totals,
     income_transaction_counts,
     expense_transaction_counts,
-    expense_category_totals
+    incoming_transfer_counts,
+    outgoing_transfer_counts
 ):
 
      # Determine the financial health status and savings rate.
@@ -2330,7 +2594,7 @@ def create_financial_report(
 
     # Create the financial report figure.
 
-    report_figure = plt.figure(figsize=(14, 14))
+    report_figure = plt.figure(figsize=(14, 9))
 
     # Format the beginning and ending dates for the report.
     formatted_start_date = start_date.strftime("%B %d, %Y")
@@ -2361,9 +2625,9 @@ def create_financial_report(
 
     # Create the grid used to organize the report sections.
     report_layout = report_figure.add_gridspec(
-        6,
+        4,
         2,
-        height_ratios=[0.2, 1.0, 0.35, 1.6, 0.18, 2.2]
+        height_ratios=[0.2, 1.0, 0.35, 1.6]
     )
 
     # Create the axis for the financial summary banner.
@@ -2390,19 +2654,6 @@ def create_financial_report(
     transaction_axis = report_figure.add_subplot(
         report_layout[3, 1]
     )
-
-   # Create the full-width axis for the category-section divider.
-    category_divider_axis = report_figure.add_subplot(
-        report_layout[4, :]
-    )
-
-    # Create the axis for the expense category chart.
-    category_axis = report_figure.add_subplot(
-        report_layout[5, 0]
-    )
-
-    # Hide the divider axis.
-    category_divider_axis.axis("off")
 
     # Hide the financial summary axis lines and tick marks.
     financial_summary.axis("off")
@@ -2464,7 +2715,7 @@ def create_financial_report(
             expense_totals
         )
     )
-
+   
     # Apply the monthly income and expense chart styling.
     style_monthly_income_expenses_chart(
         income_axis,
@@ -2474,20 +2725,26 @@ def create_financial_report(
 
     # Create the monthly income and expense transaction chart.
     (
-        income_transaction_bars,
-        expense_transaction_bars
+    income_transaction_bars,
+    expense_transaction_bars,
+    incoming_transfer_bars,
+    outgoing_transfer_bars
     ) = create_monthly_income_expense_transaction_chart(
         transaction_axis,
         months,
         income_transaction_counts,
-        expense_transaction_counts
+        expense_transaction_counts,
+        incoming_transfer_counts,
+        outgoing_transfer_counts
     )
 
     # Apply the monthly transaction chart styling.
     style_monthly_income_expense_transaction_chart(
         transaction_axis,
         income_transaction_bars,
-        expense_transaction_bars
+        expense_transaction_bars,
+        incoming_transfer_bars,
+        outgoing_transfer_bars
     )
 
     # Round the tops of the monthly income bars.
@@ -2514,27 +2771,29 @@ def create_financial_report(
         expense_transaction_bars
     )
 
+    # Round the tops of the incoming transfer bars.
+    round_bar_tops(
+        transaction_axis,
+        incoming_transfer_bars
+    )
+
+    # Round the tops of the outgoing transfer bars.
+    round_bar_tops(
+        transaction_axis,
+        outgoing_transfer_bars
+    )
     # Adjust the spacing between the report sections.
     report_figure.subplots_adjust(
         top=0.84,
-        bottom=0.06,
-        hspace=0.55,
+        bottom=0.18,
+        hspace=0.35,
         wspace=0.30
-    )
-
-    # Create the expense category donut chart.
-    expense_wedges, slice_texts = (
-        create_expense_category_pie_chart(
-            category_axis,
-            expense_category_totals,
-            "EXPENSES BY CATEGORY"
-        )
     )
 
     # Adjust the final spacing around the completed report.
     report_figure.subplots_adjust(
         top=0.84,
-        bottom=0.06,
+        bottom=0.13,
         hspace=0.55,
         wspace=0.30
     )
@@ -2718,12 +2977,15 @@ def main():
                 income_totals,
                 expense_totals,
                 income_transaction_counts,
-                expense_transaction_counts
+                expense_transaction_counts,
+                incoming_transfer_counts,
+                outgoing_transfer_counts
             ) = calculate_monthly_summary(
                 xlsx_file,
                 date_column_name,
                 amount_values,
-                transaction_types
+                transaction_types,
+                transfer_subtypes
             )
 
             # Calculate the income and expense totals for each category.
@@ -2749,7 +3011,8 @@ def main():
                 expense_totals,
                 income_transaction_counts,
                 expense_transaction_counts,
-                expense_category_totals
+                incoming_transfer_counts,
+                outgoing_transfer_counts
             )
 
             # Ask the user whether the financial report should be saved.
