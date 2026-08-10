@@ -161,8 +161,6 @@ def validate_xlsx_file(selected_file):
     # Return the validated XLSX file path.
     return xlsx_path
 
-def validate_xlsx_files(selected_files):
-    pass
 def open_xlsx(xlsx_path):
 
     """Open an XLSX file and return its contents as a pandas DataFrame."""
@@ -179,8 +177,6 @@ def open_xlsx(xlsx_path):
     # Return the successfully loaded XLSX data.
     return xlsx_file
 
-def open_xlsx_files(xlsx_paths):
-    pass
 # ============================================================
 # COLUMN IDENTIFICATION FUNCTIONS
 # ============================================================
@@ -346,21 +342,6 @@ def identify_description_column(xlsx_file):
 
     # Return the original description column name.
     return description_column_name
-# ============================================================
-# STATEMENT PREPARATION FUNCTIONS
-# ============================================================
-def standardize_statement_columns(xlsx_file):
-    pass
-def combine_statements(standardized_statements):
-    pass
-def remove_duplicate_transactions(combined_transactions):
-    pass
-def sort_transactions_by_date(combined_transactions):
-    pass
-def filter_complete_months(combined_transactions):
-    pass
-def prepare_combined_statement_data(xlsx_files):
-    pass
 # ============================================================
 # TRANSACTION CLASSIFICATION FUNCTIONS
 # ============================================================
@@ -1873,238 +1854,6 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     # Add the rounded card to the chart.
     income_axis.add_patch(card)
 
-def create_expense_category_pie_chart(category_axis,category_totals,chart_title):
-
-    # Define error messages for invalid chart data and settings.
-    invalid_category_totals_error = "Category totals must be provided as a pandas Series."
-    invalid_chart_title_error = "Chart title must be provided as nonempty text."
-    invalid_category_total_values_error = "Category totals must contain valid nonnegative numeric values."
-    invalid_expense_category_error = "Expense category totals contain an unsupported category."
-    duplicate_expense_category_error = "Expense category totals contain duplicate category labels."
-
-    # Define the chart text and donut chart settings.
-    empty_chart_message = "No categorized expenses available."
-    center_label_txt = "TOTAL SPENDING"
-    minimum_visible_percentage = 3
-    donut_start_angle = 90
-    donut_ring_width = 0.55
-    donut_radius = 1.4
-    donut_center_x = -0.2
-
-    # Define the expense categories that the chart supports.
-    approved_expense_categories = {
-        housing_category,
-        utilities_category,
-        healthcare_category,
-        transportation_category,
-        groceries_category,
-        dining_category,
-        entertainment_category,
-        shopping_category,
-        outgoing_transfers_category,
-        other_expense_category
-    }
-
-    # Assign a chart color to each displayed expense category.
-    expense_category_color_map = {
-        housing_category: "blue",
-        utilities_category: "orange",
-        healthcare_category: "red",
-        transportation_category: "deepskyblue",
-        groceries_category: "limegreen",
-        dining_category: "goldenrod",
-        entertainment_category: "purple",
-        shopping_category: "deeppink",
-        other_expense_category: "gray"
-    }
-
-    # Confirm that the category totals are provided as a pandas Series.
-    if not isinstance(category_totals, pd.Series):
-        raise TypeError(invalid_category_totals_error)
-
-    # Confirm that the chart title is provided as text.
-    if not isinstance(chart_title,str):
-        raise TypeError(invalid_chart_title_error)
-
-    # Remove surrounding spaces from the chart title.
-    cleaned_chart_title = chart_title.strip()
-
-    # Confirm that the chart title contains visible text.
-    if cleaned_chart_title == "":
-        raise ValueError(invalid_chart_title_error)
-
-    # Confirm that the category totals contain numeric values.
-    if not pd.api.types.is_numeric_dtype(category_totals):
-        raise ValueError( invalid_category_total_values_error)
-
-    # Confirm that the category totals do not contain missing values.
-    if category_totals.isna().any():
-        raise ValueError(invalid_category_total_values_error)
-
-    # Confirm that the category totals do not contain negative values.
-    if (category_totals < 0).any() :
-        raise ValueError(invalid_category_total_values_error)
-
-    # Confirm that every expense category appears only once.
-    if category_totals.index.has_duplicates:
-        raise ValueError(duplicate_expense_category_error) 
-
-    # Confirm that every category is supported by the expense chart.
-    for category_name in category_totals.index:
-
-        if pd.isna(category_name) or category_name not in approved_expense_categories:
-            raise ValueError(invalid_expense_category_error)
-
-    # Hide the axis lines, labels, and tick marks.
-    category_axis.axis("off")
-
-    # Keep the donut chart circular by using equal axis proportions.
-    category_axis.set_aspect("equal")
-
-    # Add the cleaned title above the chart.
-    category_axis.set_title(cleaned_chart_title, loc='center', pad=15, fontsize=15, fontweight= "bold", color="black")
-
-    # Create a copy of the category totals for chart preparation.
-    chart_totals = category_totals.copy()
-
-    # Remove outgoing transfers from the spending chart.
-    if outgoing_transfers_category in chart_totals.index:
-        chart_totals = chart_totals.drop(index=outgoing_transfers_category)
-
-    # Remove categories that have no spending.
-    chart_totals = chart_totals[chart_totals > 0]
-
-    # Display a message when there are no categorized expenses to chart.
-    if chart_totals.empty:
-        category_axis.text(
-            0.5,
-            0.5,
-            empty_chart_message,
-            transform=category_axis.transAxes,
-            ha="center",
-            va="center",
-            fontsize=11,
-            color="dimgray"
-        )
-
-        # Return empty chart element collections.
-        return [], []
-
-    # Calculate the total spending displayed by the chart.
-    total_spending = chart_totals.sum()
-
-    # Create a list for the donut slice colors.
-    slice_colors = []
-
-    # Retrieve the assigned color for each expense category.
-    for category_name in chart_totals.index:
-
-        category_color = expense_category_color_map[category_name]
-        slice_colors.append(category_color)
-
-    # Format the percentage and amount displayed inside each donut slice.
-    def format_slice_label(percentage):
-
-        # Hide labels belonging to slices below the visibility threshold.
-        if percentage < minimum_visible_percentage:
-            return ""
-
-        # Calculate and format the amount represented by the slice.
-        slice_amount = (percentage / 100) * total_spending
-        return (f"{percentage:.1f}%\n" f"${slice_amount:,.0f}")
-
-    # Create the expense category donut chart.
-    expense_wedges, _, slice_texts = category_axis.pie(
-    chart_totals.values,
-    colors=slice_colors,
-    startangle=donut_start_angle,
-    counterclock=False,
-    radius=donut_radius,
-    center=(donut_center_x, 0),
-    autopct=format_slice_label,
-    pctdistance=0.80,
-    wedgeprops={
-        "width": donut_ring_width,
-        "edgecolor": "white",
-        "linewidth": 1.5
-    },
-    textprops={
-        "color": "white",
-        "fontweight": "bold",
-        "fontsize": 8
-    }
-    )
-
-    # Display the total spending label in the center of the donut.
-    category_axis.text(
-    donut_center_x,
-    0.08,
-    center_label_txt,
-    ha="center",
-    va="center",
-    fontsize=9,
-    fontweight="normal",
-    color="darkgray"
-    )
-
-    # Display the total spending amount in the center of the donut.
-    category_axis.text(
-        donut_center_x,
-        -0.08,
-        f"${total_spending:,.2f}",
-        ha="center",
-        va="center",
-        fontsize=13,
-        fontweight="bold",
-        color="#1F4E79"
-    )
-
-    # Add the expense category legend beside the donut chart.
-    category_axis.legend(
-        expense_wedges,
-        chart_totals.index.tolist(),
-        loc="center left",
-        bbox_to_anchor=(1.05, 0.5),
-        ncol=1,
-        frameon=False,
-        fontsize=9
-    )
-
-    # Return the donut slices and their formatted labels.
-    return expense_wedges, slice_texts  
-
-def style_expense_category_pie_chart(category_axis):
-
-     # Define the error message for a missing expense-category chart axis.
-    missing_category_axis_error = "An expense-category chart axis is required."
-    
-
-    # Define the divider styling.
-   
-    divider_color = "black"
-    divider_width = 1.0
-    divider_layer = 3
-
-    # Confirm that an expense-category chart axis was provided.
-    if category_axis is None:
-        raise ValueError(
-            missing_category_axis_error
-        )
-
-    # Add a horizontal divider across the top of the chart section.
-    category_axis.plot(
-        [0, 1],
-        [1, 1],
-        transform=category_axis.transAxes,
-        color=divider_color,
-        linewidth=divider_width,
-        zorder=divider_layer,
-        clip_on=False
-    )
-
-    # Finish the function without returning a value.
-    return None
-
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
 # ============================================================
@@ -2414,12 +2163,6 @@ def create_monthly_transfer_chart(
 ):
     pass
 
-def style_monthly_transfer_chart(
-    transfer_axis,
-    transfer_total_bars,
-    transfer_count_bars
-):
-    pass
 # ============================================================
 # SHARED CHART STYLING FUNCTIONS
 # ============================================================
@@ -2871,13 +2614,7 @@ def save_financial_report(report_figure):
 
     # Finish the function without saving the report.
     return
-def export_financial_data(
-    combined_transactions,
-    financial_summary,
-    monthly_summary,
-    transfer_summary
-):
-    pass
+
 # ============================================================
 # MAIN
 # ============================================================
