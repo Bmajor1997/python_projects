@@ -504,15 +504,6 @@ def classify_transactions(xlsx_file,description_column_name,amount_values):
 
 def create_category_rule_map(user_category_identifiers):
 
-    # Define error messages for invalid user category data.
-    invalid_user_category_error = "User category identifiers must be provided as a dictionary."
-    invalid_category_key_error = "Category section and category names must be text value."
-    invalid_category_section_name_error = "User category identifiers contain an unsupported category."
-    invalid__category_section_error = "Each category section must be provided as a dictionary."
-    invalid_category_name_error = "User category identifiers contain an unsupported category."
-    invalid_category_identifiers_error = "Category identifiers must be provided as a collection of text values."
-    invalid_category_identifier_error = "Each category identifier must be a text value."
-
     # Define the keys used to separate user and default identifiers.
     user_identifier_key = "user identifiers"
     default_identifier_key = "default identifiers"
@@ -596,7 +587,7 @@ def create_category_rule_map(user_category_identifiers):
 
     # Confirm that the user category identifiers are provided as a dictionary.
     elif not isinstance(user_category_identifiers,dict):
-        raise TypeError(invalid_user_category_error)
+        raise TypeError("User category identifiers must be provided as a dictionary.")
 
     # Create a dictionary for the normalized user identifiers.
     normalized_user_identifiers = {}
@@ -619,7 +610,7 @@ def create_category_rule_map(user_category_identifiers):
         user_category_identifiers.items()):
      # Confirm that the section name is a text value.
         if not isinstance(section_name, str):
-            raise TypeError(invalid_category_key_error)
+            raise TypeError("Category section and category names must be text value.")
 
         # Normalize the section name for consistent comparison.
         normalized_section_name = (
@@ -631,7 +622,7 @@ def create_category_rule_map(user_category_identifiers):
         # Confirm that the section name is supported.
         if normalized_section_name not in valid_section_names:
             raise ValueError(
-                invalid_category_section_name_error
+                "User category identifiers contain an unsupported category."
             )
 
         # Retrieve the canonical name of the category section.
@@ -642,7 +633,7 @@ def create_category_rule_map(user_category_identifiers):
         # Confirm that the category section is provided as a dictionary.
         if not isinstance(category_section, dict):
             raise TypeError(
-                invalid__category_section_error
+                "Each category section must be provided as a dictionary."
             )
 
         # Process every category and identifier collection in the section.
@@ -652,7 +643,7 @@ def create_category_rule_map(user_category_identifiers):
             # Confirm that the category name is a text value.
             if not isinstance(category_name, str):
                 raise TypeError(
-                    invalid_category_key_error
+                    "Category section and category names must be text value."
                 )
 
             # Normalize the category name for consistent comparison.
@@ -690,7 +681,7 @@ def create_category_rule_map(user_category_identifiers):
         # Stop processing when the provided category is unsupported.
         if canonical_category_name is None:
             raise ValueError(
-                invalid_category_name_error
+                "User category identifiers contain an unsupported category."
             )
 
         # Confirm that the identifiers are provided as a collection.
@@ -699,7 +690,7 @@ def create_category_rule_map(user_category_identifiers):
             (list, tuple, set)
         ):
             raise TypeError(
-                invalid_category_identifiers_error
+                "Category identifiers must be provided as a collection of text values."
             )
 
         # Retrieve the list that will store the normalized identifiers.
@@ -721,7 +712,7 @@ def create_category_rule_map(user_category_identifiers):
             # Confirm that the identifier is a text value.
             if not isinstance(identifier, str):
                 raise TypeError(
-                    invalid_category_identifier_error
+                    "Each category identifier must be a text value."
                 )
 
             # Remove surrounding spaces and convert the identifier to lowercase.
@@ -808,7 +799,6 @@ def create_category_rule_map(user_category_identifiers):
 
     # Return the completed category rule map.
     return category_rule_map 
-
 def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
    # Define error messages for invalid or misaligned categorization data.
@@ -1004,17 +994,6 @@ def categorize_transactions(xlsx_file,description_column_name,transaction_types,
 
 def calculate_category_totals(amount_values,transaction_types,transaction_categories):
     
-    # Define error messages for invalid, missing, or misaligned transaction data.
-    invalid_amount_values_type_error = "Amount values must be provided as a pandas Series."
-    invalid_transaction_types_error = "Transaction types must be provided as a pandas Series."
-    invalid_transaction_categories_error = "Transaction categories must be provided as a pandas Series."
-    misaligned_transaction_types_error = "Transaction types do not align with the transaction amounts."
-    misaligned_transaction_categories_error = "Transaction categories do not align with the transaction amounts." 
-    invalid_amount_values_error = "Unable to calculate category totals because one or more amounts are missing or invalid."
-    invalid_transaction_type_error = "Unable to calculate category totals because a transaction type is invalid."
-    amount_type_mismatch_error =  "A transaction amount does not match its transaction type."
-    invalid_transaction_category_error = "A transaction category does not match its transaction type."
-
     # Define the supported income categories and their display order.
     income_categories = [
         employment_income_category,
@@ -1039,31 +1018,31 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
 
     # Confirm that the transaction amounts are provided as a pandas Series.
     if not isinstance(amount_values,pd.Series):
-        raise TypeError(invalid_amount_values_type_error)
+        raise TypeError("Amount values must be provided as a pandas Series.")
 
     # Confirm that the transaction types are provided as a pandas Series.
     if not isinstance(transaction_types,pd.Series):
-        raise TypeError(invalid_transaction_types_error)
+        raise TypeError("Transaction types must be provided as a pandas Series.")
 
     # Confirm that the transaction categories are provided as a pandas Series.
     if not isinstance(transaction_categories,pd.Series):
-        raise TypeError(invalid_transaction_categories_error)
+        raise TypeError("Transaction categories must be provided as a pandas Series.")
 
     # Confirm that the transaction types align with the transaction amounts.
     if not transaction_types.index.equals(amount_values.index):
-        raise ValueError(misaligned_transaction_types_error)
+        raise ValueError("Transaction types do not align with the transaction amounts.")
 
     # Confirm that the transaction categories align with the transaction amounts.
     if not transaction_categories.index.equals(amount_values.index):
-        raise ValueError(misaligned_transaction_categories_error)
+        raise ValueError("Transaction categories do not align with the transaction amounts.")
 
     # Stop the calculation when any transaction amount is missing.
     if amount_values.isna().any():
-        raise ValueError(invalid_amount_values_error)
+        raise ValueError("Unable to calculate category totals because one or more amounts are missing or invalid.")
 
     # Confirm that the transaction amounts contain numeric values.
     if not pd.api.types.is_numeric_dtype(amount_values):
-        raise ValueError(invalid_amount_values_error) 
+        raise ValueError("Unable to calculate category totals because one or more amounts are missing or invalid.") 
 
     # Return empty category totals when there are no transaction amounts.
     if amount_values.empty:
@@ -1083,14 +1062,14 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
 
         # Confirm that the transaction has a supported transaction type.
         if transaction_type not in (income_transaction_type,expense_transaction_type,zero_amount_transaction_type):
-            raise ValueError( invalid_transaction_type_error)
+            raise ValueError("Unable to calculate category totals because a transaction type is invalid.")
 
         # Validate income transactions.
         if transaction_type == income_transaction_type:
 
             # Confirm that an income transaction has a positive amount.
             if transaction_amount <= 0:
-                raise ValueError(amount_type_mismatch_error)
+                raise ValueError("A transaction amount does not match its transaction type.")
 
             # Skip income transactions that do not have a category.
             if pd.isna(transaction_category):
@@ -1098,14 +1077,14 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
 
             # Confirm that the transaction uses a supported income category.
             if transaction_category not in income_categories:
-                raise ValueError (invalid_transaction_category_error)
+                raise ValueError("A transaction category does not match its transaction type.")
 
         # Validate expense transactions.
         elif transaction_type == expense_transaction_type:
 
             # Confirm that an expense transaction has a negative amount.
             if transaction_amount >= 0:
-                raise ValueError(amount_type_mismatch_error)
+                raise ValueError("A transaction amount does not match its transaction type.")
 
             # Skip expense transactions that do not have a category.
             if pd.isna(transaction_category):
@@ -1113,18 +1092,18 @@ def calculate_category_totals(amount_values,transaction_types,transaction_catego
 
             # Confirm that the transaction uses a supported expense category.
             if transaction_category not in expense_categories:
-                raise ValueError(invalid_transaction_category_error)
+                raise ValueError("A transaction category does not match its transaction type.")
 
         # Validate zero-amount transactions.
         else:
 
             # Confirm that a zero-amount transaction has an amount of zero.
             if transaction_amount != 0:
-                raise ValueError(amount_type_mismatch_error)
+                raise ValueError("A transaction amount does not match its transaction type.")
 
             # Confirm that a zero-amount transaction does not have a category.
             if  pd.notna(transaction_category):
-                raise ValueError(invalid_transaction_category_error)
+                raise ValueError("A transaction category does not match its transaction type.")
 
     # Combine the transaction data into a DataFrame for category calculations.
     category_data = pd.DataFrame({"amount":amount_values,"transaction_type": transaction_types,"transaction_category": transaction_categories})
@@ -1236,51 +1215,34 @@ def calculate_financial_summary(xlsx_file,description_column_name):
 
 def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transaction_types,transfer_subtypes):
 
-    invalid_xlsx_file_type_error = "Statement data must be provided as a pandas DataFrame."
-    missing_date_column_error = "The transaction date column could not be found."
-    invalid_amount_values_type_error = "Amount values must be provided as a pandas Series."
-    invalid_transaction_types_type_error = "Transaction types must be provided as a pandas Series."
-    invalid_transfer_subtypes_type_error =  "Transfer subtypes must be provided as a pandas Series."
-    misaligned_monthly_data_error = ("Monthly transaction data does not align with " 
-                                     "the statement transactions.")
-    invalid_amount_values_error = "Monthly amount values must contain valid numeric values."
-    invalid_transaction_type_error = "Monthly data contains an unsupported transaction type."
-    invalid_transfer_subtype_error = "Monthly data contains an unsupported transfer subtype."
-    amount_type_mismatch_error = "A transaction amount does not match its transaction type."
-    missing_valid_dates_error = (
-    "No valid transaction dates were found "
-    "for the monthly summary."
-)
-
-
     # Confirm that the statement data is a DataFrame.
     if not isinstance(xlsx_file, pd.DataFrame):
         raise TypeError(
-            invalid_xlsx_file_type_error
+            "Statement data must be provided as a pandas DataFrame."
         )
 
     # Confirm that the requested date column exists.
     if date_column_name not in xlsx_file.columns:
         raise ValueError(
-            missing_date_column_error
+            "The transaction date column could not be found."
         )
 
     # Confirm that the amount values are a pandas Series.
     if not isinstance(amount_values, pd.Series):
         raise TypeError(
-            invalid_amount_values_type_error
+            "Amount values must be provided as a pandas Series."
         )
 
     # Confirm that the transaction types are a pandas Series.
     if not isinstance(transaction_types, pd.Series):
         raise TypeError(
-            invalid_transaction_types_type_error
+            "Transaction types must be provided as a pandas Series."
         )
 
     # Confirm that the transfer subtypes are a pandas Series.
     if not isinstance(transfer_subtypes, pd.Series):
         raise TypeError(
-            invalid_transfer_subtypes_type_error
+            "Transfer subtypes must be provided as a pandas Series."
         )
 
     # Confirm that all monthly data uses the statement index.
@@ -1290,7 +1252,8 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         or not transfer_subtypes.index.equals(xlsx_file.index)
     ):
         raise ValueError(
-            misaligned_monthly_data_error
+            "Monthly transaction data does not align with " 
+            "the statement transactions."
         )
 
     approved_transaction_types = {
@@ -1305,7 +1268,7 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         or not pd.api.types.is_numeric_dtype(amount_values)
     ):
         raise ValueError(
-            invalid_amount_values_error
+            "Monthly amount values must contain valid numeric values."
         )
 
     # Confirm that every transaction type is approved.
@@ -1316,7 +1279,7 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         ).all()
     ):
         raise ValueError(
-            invalid_transaction_type_error
+            "Monthly data contains an unsupported transaction type."
         )
 
     # Confirm that Income transactions contain positive amounts.
@@ -1326,7 +1289,7 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         ] <= 0
     ).any():
         raise ValueError(
-            amount_type_mismatch_error
+            "A transaction amount does not match its transaction type."
         )
 
     # Confirm that Expense transactions contain negative amounts.
@@ -1336,7 +1299,7 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         ] >= 0
     ).any():
         raise ValueError(
-            amount_type_mismatch_error
+            "A transaction amount does not match its transaction type."
         )
 
     # Confirm that Zero Amount transactions contain zero.
@@ -1346,7 +1309,7 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         ] != 0
     ).any():
         raise ValueError(
-            amount_type_mismatch_error
+            "A transaction amount does not match its transaction type."
         )   
     # Combine the dates, amounts, and transaction types into one DataFrame.
     monthly_data = pd.DataFrame({
@@ -1365,7 +1328,8 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
     # Confirm that at least one usable transaction date exists.
     if monthly_data["date"].isna().all():
         raise ValueError(
-            missing_valid_dates_error
+            "No valid transaction dates were found "
+            "for the monthly summary."
         )
 
    # Remove transactions with missing monthly calculation data.
@@ -1573,7 +1537,7 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
 def prepare_financial_insight_data(
     financial_summary,
     monthly_summary,
-    transfer_summary
+    financial_health_summary
 ):
     pass
 
@@ -1591,7 +1555,7 @@ def validate_financial_insights(
 # ============================================================
 def determine_financial_health(total_income, total_expenses):
 
-      # SET the savings-rate thresholds
+    # SET the savings-rate thresholds
     very_healthy_threshold = 20
     healthy_threshold = 10
     needs_attention_threshold = 5
@@ -1696,13 +1660,7 @@ def get_financial_health_colors(financial_health):
 
 def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
     
-     # Define the text displayed in the financial health summary.
-    financial_health_title = "Financial Health"
-    status_label = "Status:"
-    savings_rate_label = "Savings Rate:"
-    unavailable_rate_text = "N/A"
-
-    # Define the financial health card's position and dimensions.
+   # Define the financial health card's position and dimensions.
     card_x_position = 0.01
     card_y_position = 0.45
     card_width = .98
@@ -1735,11 +1693,11 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
 
     # Display N/A when a savings rate could not be calculated.
     if savings_rate == None:
-        formatted_saving_rate = unavailable_rate_text
+        formatted_saving_rate = "N/A"
 
     # Format the calculated savings rate as a percentage.
     else:
-       formatted_saving_rate = f"{savings_rate:.2f}%"
+        formatted_saving_rate = f"{savings_rate:.2f}%"
 
     # Prepare the financial health status and savings-rate text.
     status_text = financial_health
@@ -1760,7 +1718,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     linewidth=card_border_width,
     clip_on=False,
     zorder=0
-)
+    )
 
     # Add the financial health card to the axis.
     financial_health_axis.add_patch(financial_health_card)
@@ -1769,7 +1727,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     financial_health_axis.text(
         title_horizontal_position,
         common_vertical_position,
-        financial_health_title,
+        "Financial Health",
         transform=financial_health_axis.transAxes,
         ha="center",
         va="center",
@@ -1778,12 +1736,12 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
         color=status_foreground_color,
         zorder=1
     )
-    
+
     # Display the status label.
     financial_health_axis.text(
         status_label_horizontal_position,
         common_vertical_position,
-        status_label,
+        "Status:",
         transform=financial_health_axis.transAxes,
         ha="right",
         va="center",
@@ -1811,7 +1769,7 @@ def create_financial_health_summary(financial_health_axis,financial_health,savin
     financial_health_axis.text(
         savings_label_horizontal_position,
         common_vertical_position,
-        savings_rate_label,
+        "Savings Rate:",
         transform=financial_health_axis.transAxes,
         ha="right",
         va="center",
@@ -2040,17 +1998,11 @@ def create_monthly_income_expense_transaction_chart(
     incoming_transfer_counts,
     outgoing_transfer_counts
 ):
-    missing_axis_error = "A transaction chart axis is required."
-    empty_months_error = "At least one month is required."
-    misaligned_counts_error = "Transaction counts must match the number of months."
-    invalid_counts_error = "Transaction counts must be nonnegative whole numbers."
-    invalid_transfers_error = "Transfer counts cannot exceed transaction counts."
-
     if transaction_axis is None:
-        raise ValueError(missing_axis_error)
+        raise ValueError("A transaction chart axis is required.")
 
     if len(months) == 0:
-        raise ValueError(empty_months_error)
+        raise ValueError("At least one month is required.")
 
     (
         income_transaction_counts,
@@ -2072,7 +2024,9 @@ def create_monthly_income_expense_transaction_chart(
     )
 
     if any(len(values) != len(months) for values in count_collections):
-        raise ValueError(misaligned_counts_error)
+        raise ValueError(
+            "Transaction counts must match the number of months."
+        )
 
     for values in count_collections:
         if (
@@ -2082,13 +2036,17 @@ def create_monthly_income_expense_transaction_chart(
             or (values < 0).any()
             or (values % 1 != 0).any()
         ):
-            raise ValueError(invalid_counts_error)
+            raise ValueError(
+                "Transaction counts must be nonnegative whole numbers."
+            )
 
     if (
         (incoming_transfer_counts > income_transaction_counts).any()
         or (outgoing_transfer_counts > expense_transaction_counts).any()
     ):
-        raise ValueError(invalid_transfers_error)
+        raise ValueError(
+            "Transfer counts cannot exceed transaction counts."
+        )
 
     non_transfer_income_counts = (
         income_transaction_counts - incoming_transfer_counts
@@ -2276,26 +2234,25 @@ def style_monthly_income_expense_transaction_chart(
 # ============================================================
 def classify_transfer_subtypes(xlsx_file,description_column_name,transfer_rule_map):
 
-    invalid_xlsx_file_type_error = "Statement data must be provided as a pandas DataFrame."
-    missing_description_column_error = "The transaction description column could not be found."
-    invalid_transfer_rule_map_error =  "Transfer rules must be provided as a dictionary."
-    incomplete_transfer_rule_map_error = "Transfer rules do not contain all required transfer categories."
-    invalid_identifier_collection_error =  "Transfer identifiers must be provided as a list, tuple, or set."
-    invalid_transfer_identifier_error = "Each transfer identifier must be a nonempty text value."
-
     owned_account_identifier_key = "Owned account transfer"
     personal_transfer_identifier_key = "Personal transfer identifiers"
     unclassified_transfer_identifier_key = "Unclassified transfer identifiers"
-    
 
-    if  not isinstance(xlsx_file,pd.DataFrame):
-        raise TypeError(invalid_xlsx_file_type_error)
+
+    if not isinstance(xlsx_file,pd.DataFrame):
+        raise TypeError(
+            "Statement data must be provided as a pandas DataFrame."
+        )
 
     if not description_column_name in xlsx_file.columns:
-        raise ValueError(missing_description_column_error)
+        raise ValueError(
+            "The transaction description column could not be found."
+        )
 
     if not isinstance(transfer_rule_map, dict):
-        raise TypeError(invalid_transfer_rule_map_error)
+        raise TypeError(
+            "Transfer rules must be provided as a dictionary."
+        )
 
     required_rule_keys = {
         owned_account_identifier_key,
@@ -2306,24 +2263,32 @@ def classify_transfer_subtypes(xlsx_file,description_column_name,transfer_rule_m
     for required_rule_key in required_rule_keys:
 
         if required_rule_key not in required_rule_keys:
-            raise ValueError(incomplete_transfer_rule_map_error)
+            raise ValueError(
+                "Transfer rules do not contain all required transfer categories."
+            )
 
         identifier_collection = transfer_rule_map[required_rule_key]
 
         if not isinstance(identifier_collection, (list, tuple, set)):
-            raise TypeError(invalid_identifier_collection_error)
+            raise TypeError(
+                "Transfer identifiers must be provided as a list, tuple, or set."
+            )
 
         for identifier in identifier_collection:
 
             if not isinstance(identifier,str):
-                raise TypeError(invalid_transfer_identifier_error)
+                raise TypeError(
+                    "Each transfer identifier must be a nonempty text value."
+                )
 
             if identifier.strip == "":
-                raise ValueError(invalid_transfer_identifier_error)
+                raise ValueError(
+                    "Each transfer identifier must be a nonempty text value."
+                )
 
     owned_account_identifiers = transfer_rule_map[owned_account_identifier_key]
     personal_transfer_identifiers = transfer_rule_map[personal_transfer_identifier_key]
-    unclassified_transfer_identifiers = transfer_rule_map[ unclassified_transfer_identifier_key]
+    unclassified_transfer_identifiers = transfer_rule_map[unclassified_transfer_identifier_key]
 
     normalized_descriptions = xlsx_file[description_column_name]
     normalized_descriptions = (
@@ -2345,7 +2310,7 @@ def classify_transfer_subtypes(xlsx_file,description_column_name,transfer_rule_m
         dtype="bool"
     )
 
-    unclassified_transfer_mask  = pd.Series(
+    unclassified_transfer_mask = pd.Series(
         False,
         index=xlsx_file.index,
         dtype="bool"
@@ -2812,18 +2777,13 @@ def create_financial_report(
 # ============================================================
 def save_financial_report(report_figure):
 
-    # Define the prompts and messages used during the save process.
-    chart_prompt = "Would you like to save this chart as an image? (Y/N): "
-    invalid_save_choice_message = "The input is invalid."
-    chart_saved_successfully_message = "Charts have been saved successfully."
-    none_error = "Must Enter A Valid Input."
-    file_name_prompt = "Please Enter The File Name: "
-
     # Continue asking until the user provides a valid save choice.
     while True:
 
         # Ask the user whether the financial report should be saved.
-        save_choice = input(chart_prompt)
+        save_choice = input(
+            "Would you like to save this chart as an image? (Y/N): "
+        )
 
         # Begin the save process when the user enters Y.
         if save_choice.upper() == "Y":
@@ -2832,12 +2792,12 @@ def save_financial_report(report_figure):
             while True:
 
                 # Ask for the file name and remove surrounding spaces.
-                file_name = input(file_name_prompt)
+                file_name = input("Please Enter The File Name: ")
                 file_name = file_name.strip()
 
                 # Display an error when the user enters an empty file name.
                 if file_name == "":
-                    print(none_error)
+                    print("Must Enter A Valid Input.")
                     continue
 
                 # Create and save the financial report image.
@@ -2853,7 +2813,7 @@ def save_financial_report(report_figure):
 
                     # Confirm that the financial report was saved.
                     print(
-                        chart_saved_successfully_message
+                        "Charts have been saved successfully."
                     )
 
                     # Finish the function after saving the report.
@@ -2866,12 +2826,11 @@ def save_financial_report(report_figure):
         # Display an error when the user enters an unsupported choice.
         else:
             print(
-                invalid_save_choice_message
+                "The input is invalid."
             )
 
     # Finish the function without saving the report.
     return
-
 # ============================================================
 # MAIN
 # ============================================================
