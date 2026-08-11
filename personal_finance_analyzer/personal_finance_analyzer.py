@@ -1537,18 +1537,290 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
 def prepare_financial_insight_data(
     financial_summary,
     monthly_summary,
-    financial_health_summary
+    financial_health_summary,
+    reporting_period
 ):
+
+   required_financial_summary_length = 6
+   required_financial_health_summary_length = 2 
+   required_monthly_summary_length = 7
+   required_reporting_period_length = 2
+   date_display_format = "%B %d, %Y"
+   unavailable_savings_rate_text = "N/A"
+
+   financial_health_status_map = {
+    "very healthy": "Very Healthy",
+    "healthy": "Healthy",
+    "needs attention": "Needs Attention",
+    "caution": "Caution",
+    "weak": "Weak",
+    "at risk": "At Risk",
+    "very weak": "Very Weak",
+    "unable to determine": "Unable to Determine"
+    } 
+
+
+   if not isinstance(financial_summary, tuple):
+       raise TypeError("Financial summary must be provided as a tuple.")
+
+   if  len(financial_summary) != required_financial_summary_length:
+       raise ValueError("Financial summary must contain six values.")
+       
+   if not isinstance(monthly_summary, tuple):
+       raise TypeError("Monthly summary must be provided as a tuple.")
+
+   if  len(monthly_summary) != required_monthly_summary_length:
+       raise ValueError("Monthly summary must have a legth of seven.")
+
+   if not isinstance(financial_health_summary, tuple):
+       raise TypeError("Financial health summary must be provided as a tuple.")
+
+   if len(financial_health_summary) != required_financial_health_summary_length:
+       raise ValueError("Financial health summary must have two values.")
+
+   if not isinstance(reporting_period, tuple):
+       raise TypeError("Reporting period must be provided as a tuple.")
+   
+   if len(reporting_period) !=  required_reporting_period_length:
+       raise ValueError("Reporting period must contain two values.")
+
+   (
+        transaction_count,
+        total_income,
+        total_expenses,
+        net_balance,
+        amount_values,
+        transaction_types
+    ) = financial_summary
+
+
+    # Retrieve the monthly summary values.
+   (
+    months,
+    income_totals,
+    expense_totals,
+    income_transaction_counts,
+    expense_transaction_counts,
+    income_transfer_counts,
+    expense_transfer_counts
+    ) = monthly_summary
+
+    # Retrieve the Financial Health values.
+   (
+    financial_health,
+    savings_rate
+    ) = financial_health_summary
+
+    # Retrieve the reporting-period dates.
+   (
+    start_date,
+    end_date
+    ) = reporting_period
+    
+
+   if start_date == end_date:
+       raise ValueError("Start and end dates are identical.")
+
+   if start_date > end_date:
+       start_date, end_date = end_date, start_date
+
+    # Format the reporting-period dates for display.
+   formatted_start_date = start_date.strftime(
+        date_display_format
+    )
+
+   formatted_end_date = end_date.strftime(
+        date_display_format
+    )
+
+    # Normalize the Financial Health status.
+   if not isinstance(financial_health, str):
+        raise TypeError("Financial Health status must be text.")
+
+   financial_health_key = (financial_health.strip().casefold())
+
+   if financial_health_key not in financial_health_status_map:
+        raise ValueError("Financial Health contains an unsupported status.")
+
+   normalized_financial_health = (financial_health_status_map[financial_health_key])
+
+   if savings_rate is None:
+       formatted_savings_rate = unavailable_savings_rate_text
+
+   else:
+       formatted_savings_rate = f"{savings_rate:,.2f}%"
+
+   formatted_total_income = f"${total_income:,.2f}"
+   formatted_total_expenses = (f"${abs(total_expenses):,.2f}")
+
+   if net_balance < 0:
+       formatted_net_balance = f"-${abs(net_balance):,.2f}"
+
+   else:
+       formatted_net_balance = f"${net_balance:,.2f}"
+
+   normalized_month_names = set()
+   monthly_income_expense_records = []
+   monthly_transaction_records = []
+
+   combined_monthly_income = 0
+   combined_monthly_expenses = 0
+   total_income_transaction_count = 0
+   total_expense_transaction_count = 0
+   total_income_transfer_count = 0
+   total_expense_transfer_count = 0
+   total_non_transfer_income_count = 0
+   total_non_transfer_expense_count = 0
+
+   for (
+    month,
+    income_total,
+    expense_total,
+    income_transaction_count,
+    expense_transaction_count,
+    income_transfer_count,
+    expense_transfer_count
+    ) in zip(
+        months,
+        income_totals,
+        expense_totals,
+        income_transaction_counts,
+        expense_transaction_counts,
+        income_transfer_counts,
+        expense_transfer_counts
+    ):
+
+        if not isinstance(month,str):
+            raise TypeError("Month names must be provided as text.")
+
+        normalized_month = month.strip()
+
+        if not normalized_month:
+            raise ValueError("Month names cannot be empty.")
+
+
+        if normalized_month in normalized_month_names:
+            raise ValueError("Month already exists in the months list.")
+
+        normalized_month_names.add(normalized_month)
+
+        if income_transfer_count > income_transaction_count:
+            raise ValueError("Income transfers exceed the income transaction count.")
+
+        if expense_transfer_count > expense_transaction_count:
+            raise ValueError("Expense transfers exceed the expense transfers.")
+
+        non_transfer_income_count = income_transaction_count - income_transfer_count
+        non_transfer_expense_count = expense_transaction_count - expense_transfer_count
+
+        formatted_income_total = (f"${income_total:,.2f}")
+
+        formatted_expense_total = (f"${abs(expense_total):,.2f}")
+
+        # Store the current month's income and expense amounts.
+        monthly_income_expense_record = {
+            "Month": normalized_month,
+            "Income": formatted_income_total,
+            "Expenses": formatted_expense_total
+        }
+
+        # Store the current month's transaction and transfer counts.
+        monthly_transaction_record = {
+            "Month": normalized_month,
+            "Total Income Transactions": income_transaction_count,
+            "Income Transfers": income_transfer_count,
+            "Non-Transfer Income Transactions": non_transfer_income_count,
+            "Total Expense Transactions": expense_transaction_count,
+            "Expense Transfers": expense_transfer_count,
+            "Non-Transfer Expense Transactions": non_transfer_expense_count
+        }
+
+        monthly_income_expense_records.append(monthly_income_expense_record)
+
+        monthly_transaction_records.append(monthly_transaction_record)
+
+        combined_monthly_income = combined_monthly_income + income_total
+        combined_monthly_expenses = combined_monthly_expenses + (abs(expense_total))
+
+        total_income_transaction_count =  total_income_transaction_count + income_transaction_count
+        total_expense_transaction_count = total_expense_transaction_count + expense_transaction_count
+
+        total_income_transfer_count = total_income_transfer_count + income_transfer_count
+        total_expense_transfer_count = total_expense_transfer_count + expense_transfer_count
+
+        total_non_transfer_income_count = total_non_transfer_income_count + non_transfer_income_count
+        total_non_transfer_expense_count = total_non_transfer_expense_count +non_transfer_expense_count
+
+    
+   unrepresented_income_amount = total_income - combined_monthly_income
+   unrepresented_expense_amount = abs(total_expenses) - combined_monthly_expenses
+   unrepresented_transaction_count = transaction_count - total_income_transaction_count - total_expense_transaction_count
+
+   if round(unrepresented_income_amount, 2) < 0:
+        raise ValueError("Monthly income exceed total income.")
+
+   if round(unrepresented_expense_amount, 2) < 0:     
+       raise ValueError("Monthly expenses exceed total expenses.")
+
+   if unrepresented_transaction_count < 0: 
+       raise ValueError("Monthly transaction count exceed the table transaction count.")
+
+   reporting_period_section = {
+       "Start Date": formatted_start_date,
+       "End Date": formatted_end_date
+   }
+
+   financial_summary_table_section = {
+       "Transaction Count": transaction_count,
+       "Total Income": formatted_total_income,
+       "Total Expenses": formatted_total_expenses,
+       "Net Balance": formatted_net_balance
+   }       
+
+   financial_health_section = {
+       "Status": normalized_financial_health,
+       "Savings Rate": formatted_savings_rate
+   }
+
+   # Store the completed monthly income and expense records.
+   monthly_income_expense_section = {
+        "Monthly Records": monthly_income_expense_records
+    }
+
+   if round(unrepresented_income_amount, 2) > 0:
+       monthly_income_expense_section["Income Not Represented in Monthly Totals"] = f"${unrepresented_income_amount:,.2f}"
+
+   if round(unrepresented_expense_amount, 2) > 0:
+       monthly_income_expense_section["Expenses Not Represented in Monthly Totals"] = f"${unrepresented_expense_amount:,.2f}"
+
+   income_expense_transaction_section = {
+        "Total Income Transactions": total_income_transaction_count,
+        "Total Expense Transactions": total_expense_transaction_count,
+        "Income Transfers": total_income_transfer_count,
+        "Non-Transfer Income Transactions": total_non_transfer_income_count,
+        "Expense Transfers": total_expense_transfer_count,
+        "Non-Transfer Expense Transactions": total_non_transfer_expense_count,
+        "Monthly Records":monthly_transaction_records
+    }
+
+   if unrepresented_transaction_count > 0:
+       income_expense_transaction_section[
+           "Transactions Not Represented in Monthly Income/Expense Counts"
+           ] = unrepresented_transaction_count
+
+   financial_insight_data  = {
+       "Reporting Period": reporting_period_section,
+       "Financial Summary Table": financial_summary_table_section,
+       "Financial Health": financial_health_section,
+       "Monthly Income vs. Expenses": monthly_income_expense_section,
+       "Income vs. Expense Transactions": income_expense_transaction_section
+   } 
+
+   return financial_insight_data
+def generate_financial_insights(financial_insight_data):
     pass
 
-def generate_financial_insights(
-    financial_insight_data
-):
-    pass
-
-def validate_financial_insights(
-    financial_insights
-):
+def validate_financial_insights(financial_insights):
     pass
 # ============================================================
 # FINANCIAL HEALTH  FUNCTIONS
