@@ -54,12 +54,10 @@ at_risk_status = "At Risk"
 very_weak_status = "Very Weak"
 unable_to_determine_status = "Unable to Determine"
 
-
 # Transaction types.
 income_transaction_type = "Income"
 expense_transaction_type = "Expense"
 zero_amount_transaction_type = "Zero Amount"
-
 
 # Transfer identifiers.
 default_transfer_identifiers = [
@@ -77,11 +75,9 @@ personal_transfer = "Personal Transfer"
 owned_account_transfer = "Owned-Account Transfer"
 unclassified_transfer = "Unclassified Transfer"
 
-
 # Fallback categories.
 other_income_category = "Other Income"
 other_expense_category = "Other Expense"
-
 
 # Expense categories.
 housing_category = "Housing"
@@ -93,15 +89,49 @@ dining_category = "Dining"
 entertainment_category = "Entertainment"
 shopping_category = "Shopping"
 
-
 # Income categories.
 employment_income_category = "Employment Income"
 refund_reimbursement_category = "Refund or Reimbursement"
 
-
 # Transfer categories.
 incoming_transfers_category = "Incoming Transfers"
 outgoing_transfers_category = "Outgoing Transfers"
+
+known_subscription_identifiers = {
+
+    # Streaming.
+    "netflix": "Netflix", "hulu": "Hulu",
+    "disney+": "Disney+", "disney plus": "Disney+",
+    "max": "Max", "paramount+": "Paramount+",
+    "paramount plus": "Paramount+", "peacock": "Peacock",
+    "apple tv": "Apple TV", "youtube premium": "YouTube Premium",
+
+    # Music.
+    "spotify": "Spotify", "apple music": "Apple Music",
+    "pandora": "Pandora", "siriusxm": "SiriusXM",
+
+    # Technology and software.
+    "chatgpt": "ChatGPT", "microsoft 365": "Microsoft 365",
+    "adobe": "Adobe", "dropbox": "Dropbox",
+    "google one": "Google One", "icloud": "iCloud",
+
+    # Gaming.
+    "xbox game pass": "Xbox Game Pass",
+    "playstation plus": "PlayStation Plus",
+    "nintendo switch online": "Nintendo Switch Online",
+
+    # Memberships and delivery services.
+    "amazon prime": "Amazon Prime",
+    "walmart+": "Walmart+",
+    "walmart plus": "Walmart+",
+    "instacart+": "Instacart+",
+    "dashpass": "DashPass",
+    "uber one": "Uber One",
+
+    # Fitness.
+    "planet fitness": "Planet Fitness",
+    "peloton": "Peloton",
+}
 # ============================================================
 # DISPLAY FUNCTIONS
 # ============================================================
@@ -1755,6 +1785,322 @@ def calculate_monthly_summary(xlsx_file,date_column_name, amount_values,transact
         outgoing_transfer_counts
     )
 
+def calculate_subscription_summary(
+    xlsx_file,
+    date_column_name,
+    description_column_name,
+    amount_values,
+    transaction_types,
+    transfer_subtypes
+):
+    """
+    Identify known subscription payments and return a subscription summary.
+
+    Returns None when no known subscriptions are detected.
+    """
+
+    # Confirm that the statement data is a DataFrame.
+    if not isinstance(xlsx_file, pd.DataFrame):
+        raise TypeError(
+            "Statement data must be provided as a pandas DataFrame."
+        )
+
+    # Confirm that the amount values are a pandas Series.
+    if not isinstance(amount_values, pd.Series):
+        raise TypeError(
+            "Amount values must be provided as a pandas Series."
+        )
+
+    # Confirm that the transaction types are a pandas Series.
+    if not isinstance(transaction_types, pd.Series):
+        raise TypeError(
+            "Transaction types must be provided as a pandas Series."
+        )
+
+    # Confirm that the transfer subtypes are a pandas Series.
+    if not isinstance(transfer_subtypes, pd.Series):
+        raise TypeError(
+            "Transfer subtypes must be provided as a pandas Series."
+        )
+
+    # Confirm that all transaction-level data aligns with the statement.
+    if (
+        not amount_values.index.equals(xlsx_file.index)
+        or not transaction_types.index.equals(xlsx_file.index)
+        or not transfer_subtypes.index.equals(xlsx_file.index)
+    ):
+        raise ValueError(
+            "Subscription transaction data does not align with "
+            "the statement transactions."
+        )
+
+    # Confirm that the requested date column exists.
+    if date_column_name not in xlsx_file.columns:
+        raise ValueError(
+            "The transaction date column could not be found."
+        )
+
+    # Confirm that the requested description column exists.
+    if description_column_name not in xlsx_file.columns:
+        raise ValueError(
+            "The transaction description column could not be found."
+        )
+
+    # Confirm that all amount values are present and numeric.
+    if (
+        amount_values.isna().any()
+        or not pd.api.types.is_numeric_dtype(amount_values)
+    ):
+        raise ValueError(
+            "Subscription amount values must contain valid numeric values."
+        )
+
+    # Define the supported transaction types.
+    approved_transaction_types = {
+        income_transaction_type,
+        expense_transaction_type,
+        zero_amount_transaction_type
+    }
+
+    # Confirm that every transaction type is supported.
+    if (
+        transaction_types.isna().any()
+        or not transaction_types.isin(
+            approved_transaction_types
+        ).all()
+    ):
+        raise ValueError(
+            "Subscription data contains an unsupported transaction type."
+        )
+
+    # Define the supported transfer subtypes.
+    approved_transfer_subtypes = {
+        not_a_transfer,
+        personal_transfer,
+        owned_account_transfer,
+        unclassified_transfer
+    }
+
+    # Confirm that every transfer subtype is supported.
+    if (
+        transfer_subtypes.isna().any()
+        or not transfer_subtypes.isin(
+            approved_transfer_subtypes
+        ).all()
+    ):
+        raise ValueError(
+            "Subscription data contains an unsupported transfer subtype."
+        )
+
+    # Retrieve and convert the transaction dates.
+    transaction_dates = pd.to_datetime(
+        xlsx_file[date_column_name],
+        errors="coerce"
+    )
+
+    # Confirm that at least one usable transaction date exists.
+    if transaction_dates.isna().all():
+        raise ValueError(
+            "No valid transaction dates were found "
+            "for subscription analysis."
+        )
+
+    # Retrieve and normalize the transaction descriptions.
+    normalized_descriptions = (
+        xlsx_file[description_column_name]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+
+    # Store detected subscriptions while transactions are processed.
+    detected_subscriptions = {}
+
+    # Process every transaction.
+    for transaction_index in xlsx_file.index:
+
+        # Retrieve the transaction classification.
+        transaction_type = transaction_types.loc[
+            transaction_index
+        ]
+
+        transfer_subtype = transfer_subtypes.loc[
+            transaction_index
+        ]
+
+        # Ignore transactions that are not expenses.
+        if transaction_type != expense_transaction_type:
+            continue
+
+        # Ignore transfer transactions.
+        if transfer_subtype != not_a_transfer:
+            continue
+
+        # Retrieve the normalized transaction description.
+        normalized_description = normalized_descriptions.loc[
+            transaction_index
+        ]
+
+        # Prepare to store the matched subscription.
+        matched_subscription_name = None
+
+        # Search for a known subscription identifier.
+        for (
+            subscription_identifier,
+            subscription_display_name
+        ) in known_subscription_identifiers.items():
+
+            if (
+                subscription_identifier
+                in normalized_description
+            ):
+                matched_subscription_name = (
+                    subscription_display_name
+                )
+                break
+
+        # Ignore expenses that are not known subscriptions.
+        if matched_subscription_name is None:
+            continue
+
+        # Retrieve the positive subscription charge.
+        subscription_amount = abs(
+            float(
+                amount_values.loc[
+                    transaction_index
+                ]
+            )
+        )
+
+        # Retrieve the transaction date.
+        transaction_date = transaction_dates.loc[
+            transaction_index
+        ]
+
+        # Create the subscription record when first detected.
+        if (
+            matched_subscription_name
+            not in detected_subscriptions
+        ):
+            detected_subscriptions[
+                matched_subscription_name
+            ] = {
+                "Subscription": matched_subscription_name,
+                "Most Recent Charge": subscription_amount,
+                "Most Recent Date": transaction_date,
+                "Total Paid": subscription_amount,
+                "Occurrences": 1,
+                "Detection Method": "Known Subscription"
+            }
+
+            continue
+
+        # Retrieve the existing subscription record.
+        subscription_record = detected_subscriptions[
+            matched_subscription_name
+        ]
+
+        # Add the current charge to the reporting-period total.
+        subscription_record["Total Paid"] += (
+            subscription_amount
+        )
+
+        # Increase the number of detected subscription payments.
+        subscription_record["Occurrences"] += 1
+
+        # Update the most recent charge when this payment is newer.
+        if (
+            pd.notna(transaction_date)
+            and (
+                pd.isna(
+                    subscription_record[
+                        "Most Recent Date"
+                    ]
+                )
+                or transaction_date
+                > subscription_record[
+                    "Most Recent Date"
+                ]
+            )
+        ):
+            subscription_record[
+                "Most Recent Date"
+            ] = transaction_date
+
+            subscription_record[
+                "Most Recent Charge"
+            ] = subscription_amount
+
+    # Return nothing when no known subscriptions were detected.
+    if not detected_subscriptions:
+        return None
+
+    # Count the unique subscriptions that were detected.
+    subscription_count = len(
+        detected_subscriptions
+    )
+
+    # Prepare the completed subscription records.
+    subscriptions = []
+
+    # Track total subscription spending across the reporting period.
+    total_subscription_spending = 0.0
+
+    # Build the final public subscription records.
+    for subscription_record in (
+        detected_subscriptions.values()
+    ):
+
+        # Round the monetary results to currency precision.
+        most_recent_charge = round(
+            subscription_record[
+                "Most Recent Charge"
+            ],
+            2
+        )
+
+        total_paid = round(
+            subscription_record[
+                "Total Paid"
+            ],
+            2
+        )
+
+        # Add this subscription's spending to the overall total.
+        total_subscription_spending += total_paid
+
+        # Create the public record without the internal date value.
+        final_subscription_record = {
+            "Subscription": subscription_record[
+                "Subscription"
+            ],
+            "Most Recent Charge": most_recent_charge,
+            "Total Paid": total_paid,
+            "Occurrences": subscription_record[
+                "Occurrences"
+            ],
+            "Detection Method": subscription_record[
+                "Detection Method"
+            ]
+        }
+
+        # Store the completed subscription record.
+        subscriptions.append(
+            final_subscription_record
+        )
+
+    # Create the final subscription summary.
+    subscription_summary = {
+        "Subscription Count": subscription_count,
+        "Total Subscription Spending": round(
+            total_subscription_spending,
+            2
+        ),
+        "Subscriptions": subscriptions
+    }
+
+    return subscription_summary
+    
 # ============================================================
 # AI FINANCIAL INSIGHT FUNCTIONS
 # ============================================================
@@ -2055,7 +2401,6 @@ def generate_financial_insights(financial_insight_data):
     # Define the project-specific error raised when insight generation fails.
     class FinancialInsightGenerationError(Exception):
         pass
-
 
     # Define the OpenAI model used to generate financial insights.
     financial_insight_model = "gpt-5.6-terra"
@@ -2534,38 +2879,10 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     # Add the rounded card to the chart.
     income_axis.add_patch(card)
 
-def create_expense_pie_chart(
-    pie_axis,
-    descriptions,
-    amount_values,
-    transaction_types,
-):
+def create_expense_pie_chart(pie_axis,descriptions,amount_values,transaction_types):
     """
     Create a pie chart showing expenses grouped by spending category.
 
-    Parameters
-    ----------
-    pie_axis : matplotlib.axes.Axes
-        Axis where the expense pie chart will be created.
-
-    descriptions : list
-        Transaction descriptions aligned with amount_values
-        and transaction_types.
-
-    amount_values : list
-        Numeric transaction amounts.
-
-    transaction_types : list
-        Transaction classifications such as "Income" or "Expense".
-
-    Returns
-    -------
-    tuple
-        (
-            pie_wedges,
-            category_labels,
-            category_totals,
-        )
     """
 
     # Verify that all transaction collections contain the same
@@ -2739,28 +3056,10 @@ def create_expense_pie_chart(
         category_totals,
     )
 
-def style_expense_pie_chart(
-    pie_axis,
-    pie_wedges,
-    category_labels,
-    category_totals,
-):
+def style_expense_pie_chart(pie_axis,pie_wedges,category_labels,category_totals):
     """
     Apply presentation styling to the expense-category pie chart.
 
-    Parameters
-    ----------
-    pie_axis : matplotlib.axes.Axes
-        Axis containing the pie chart.
-
-    pie_wedges : list
-        Pie-chart wedges returned by create_expense_pie_chart().
-
-    category_labels : list
-        Names of the expense categories represented by the wedges.
-
-    category_totals : dict
-        Expense totals for each displayed category.
     """
 
     if len(pie_wedges) != len(category_labels):
