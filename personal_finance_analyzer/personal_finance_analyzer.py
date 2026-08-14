@@ -12,7 +12,7 @@ from tkinter import filedialog
 import tkinter as tk
 import numpy as np
 from openai import OpenAI, APIError
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import os
 import json
 from typing import Optional
@@ -2609,7 +2609,7 @@ def generate_financial_insights(financial_insight_data):
     financial_insight_model = "gpt-5.6-terra"
 
     # Define the maximum number of tokens allowed in the generated response.
-    maximum_financial_insight_output_tokens = 1500
+    maximum_financial_insight_output_tokens = 4000
 
     # Retrieve the OpenAI API key from the environment.
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -2717,8 +2717,15 @@ def generate_financial_insights(financial_insight_data):
         - Do not invent transaction categories, causes, trends, amounts, percentages,
         recommendations, or other facts that are not supported by the supplied data.
         - Do not provide extensive financial advice.
-        - Markdown formatting, including bullets, bold text, and subheadings, is
-        permitted within each section.
+        - Use plain text only. Do not use Markdown formatting.
+        - Use complete, grammatically correct sentences with normal spacing.
+        - Keep each section between 60 and 90 words so all six sections can fit
+        on one report page.
+        - Proofread each section before returning the response.
+        - Explain the Expense Categories data, including the largest expense
+        categories and meaningful comparisons.
+        - Explain the Subscription Summary, including the subscription count and
+        total subscription expenses. If none were identified, state that clearly.
         - Include the following exact disclaimer only once, at the end of the
         Income vs. Expense Transactions section:
         "{required_disclaimer}"
@@ -2752,11 +2759,9 @@ def generate_financial_insights(financial_insight_data):
             max_output_tokens=maximum_financial_insight_output_tokens,
         )
 
-    except APIError as original_error:
-
+    except ValidationError as original_error:
         raise FinancialInsightGenerationError(
-            "The financial insights could not be generated because "
-            "the OpenAI request failed."
+            "The model returned incomplete or invalid financial insight output."
         ) from original_error
 
     model_refused_request = any(
@@ -2857,7 +2862,7 @@ def validate_financial_insights(financial_insights):
         )
 
     for section_name, section_text in financial_insights.items():
-
+        
         if not isinstance(section_text, str):
             raise TypeError(
                 f"The {section_name} section must contain a string."
@@ -3199,7 +3204,12 @@ def style_financial_table(financial_table):
 # ============================================================
 # INCOME AND EXPENSE CHART FUNCTIONS
 # ============================================================
-def create_monthly_income_expenses_chart(income_axis,months,income_totals,expense_totals):
+def create_monthly_income_expenses_chart(
+    income_axis,
+    months,
+    income_totals,
+    expense_totals
+):
 
         # Set the width of each bar.
     bar_width = 0.15
@@ -3241,9 +3251,18 @@ def create_monthly_income_expenses_chart(income_axis,months,income_totals,expens
     income_axis.set_xticklabels(months)
 
     # Add the x-axis label, y-axis label, and chart title.
-    income_axis.set_xlabel("Month")
+    income_axis.set_xlabel(
+        "Month",
+        labelpad=12
+    )
     income_axis.set_ylabel("Amount ($)")
-    income_axis.set_title("MONTHLY INCOME vs EXPENSES",fontsize=15, fontweight="bold", color="black")
+    income_axis.set_title(
+        "MONTHLY INCOME vs EXPENSES",
+        fontsize=15,
+        fontweight="bold",
+        color="black",
+        pad=8
+    )
 
     # Hide the top and right chart borders.
     income_axis.spines["top"].set_visible(False)
@@ -3259,8 +3278,14 @@ def create_monthly_income_expenses_chart(income_axis,months,income_totals,expens
     )
 
     # Add the income and expense legend below the chart.
-    income_axis.legend(loc = "lower center",bbox_to_anchor=(0.1, -0.35),
-    ncol=1,fontsize=11,frameon=False, columnspacing = 5)
+    income_axis.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.30),
+        ncol=2,
+        fontsize=9,
+        frameon=False,
+        columnspacing=2
+    )
     
     # Return the income and expense bar containers.
     return income_bars, expense_bars
@@ -3316,9 +3341,9 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     # Create the rounded card surrounding the income and expense chart.
     card = FancyBboxPatch(
-        (-0.15, -0.32),
-        1.17,
-        1.47,
+        (-0.15, -0.48),
+        1.22,
+        1.65,
         transform=income_axis.transAxes,
         boxstyle="round,pad=0.02,rounding_size=0.03",
         facecolor="white",
@@ -3496,6 +3521,7 @@ def create_expense_pie_chart(pie_axis,descriptions,amount_values,transaction_typ
         category_values,
         colors=pie_colors,
         startangle=90,
+        radius=1.35,
         wedgeprops={
             "edgecolor": "white",
             "linewidth": 1.5,
@@ -3531,11 +3557,12 @@ def style_expense_pie_chart(pie_axis,pie_wedges,category_labels,category_totals)
         pie_wedges,
         category_labels,
         title="Expense Breakdown",
-        loc="center left",
-        bbox_to_anchor=(1.0, 0.5),
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.08),
+        ncol=2,
         frameon=False,
-        fontsize=9,
-        title_fontsize=10
+        fontsize=8,
+        title_fontsize=9
     )
 
     # Keep the pie circular regardless of the surrounding figure size.
@@ -3764,9 +3791,9 @@ def style_monthly_income_expense_transaction_chart(
 
     # Create the rounded card surrounding the chart.
     card = FancyBboxPatch(
-        (-0.15, -0.32),
-        1.17,
-        1.47,
+        (-0.20, -0.32),
+        1.28,
+        1.55,
         transform=transaction_axis.transAxes,
         boxstyle=(
             "round,pad=0.02,"
@@ -4102,11 +4129,10 @@ def create_financial_report(
     incoming_transfer_counts,
     outgoing_transfer_counts,
     expense_category_totals,
-    subscription_summary,
     financial_insights
 ):
 
-     # Determine the financial health status and savings rate.
+    # Determine the financial health status and savings rate.
     financial_health, savings_rate = determine_financial_health(
         total_income,
         total_expenses
@@ -4114,7 +4140,7 @@ def create_financial_report(
 
     # Create the financial report figure.
 
-    report_figure = plt.figure(figsize=(14, 9))
+    report_figure = plt.figure(figsize=(18, 23))
 
     # Format the beginning and ending dates for the report.
     formatted_start_date = start_date.strftime("%B %d, %Y")
@@ -4137,7 +4163,7 @@ def create_financial_report(
     # Display the reporting period below the program title.
     report_figure.text(
         0.5,
-        0.9,
+        0.94,
         report_period,
         ha="center",
         fontsize=15
@@ -4145,9 +4171,9 @@ def create_financial_report(
 
     # Create the grid used to organize the report sections.
     report_layout = report_figure.add_gridspec(
-        4,
-        2,
-        height_ratios=[0.2, 1.0, 0.35, 1.6]
+        6,
+        6,
+        height_ratios=[0.25, 1.20, 0.65, 2.6, 0.60, 6.2]
     )
 
     # Create the axis for the financial summary banner.
@@ -4167,12 +4193,156 @@ def create_financial_report(
 
     # Create the axis for the monthly income and expense chart.
     income_axis = report_figure.add_subplot(
-        report_layout[3, 0]
+        report_layout[3, 0:2]
     )
 
     # Create the axis for the monthly transaction chart.
     transaction_axis = report_figure.add_subplot(
-        report_layout[3, 1]
+        report_layout[3, 2:4]
+    )
+
+    # Create the axis for the expense-category pie chart.
+    pie_axis = report_figure.add_subplot(
+        report_layout[3, 4:6]
+    )
+
+    # Create the axis for the AI financial-insights banner.
+    financial_insight_banner_axis = report_figure.add_subplot(
+        report_layout[4, :]
+    )
+
+    # Create the axes for the AI financial-insight columns.
+    left_financial_insight_axis = report_figure.add_subplot(
+        report_layout[5, 0:3]
+    )
+
+    right_financial_insight_axis = report_figure.add_subplot(
+        report_layout[5, 3:6]
+    )
+
+    # Set the background color of the AI financial-insights banner.
+    financial_insight_banner_axis.set_facecolor(
+        "darkblue"
+    )
+
+    # Remove the AI financial-insights banner tick marks.
+    financial_insight_banner_axis.set_xticks([])
+    financial_insight_banner_axis.set_yticks([])
+
+    # Add the AI financial-insights banner title.
+    financial_insight_banner_axis.text(
+        0.5,
+        0.5,
+        "AI Financial Insights",
+        ha="center",
+        va="center",
+        fontsize=14,
+        fontweight="bold",
+        color="white"
+    )
+
+    # Hide the axes used to display the AI summaries.
+    left_financial_insight_axis.axis("off")
+    right_financial_insight_axis.axis("off")
+
+    # Define the sections displayed in the left column.
+    left_financial_insight_sections = [
+        "Financial Summary Table",
+        "Financial Health",
+        "Monthly Income vs. Expenses",
+    ]
+
+    # Define the sections displayed in the right column.
+    right_financial_insight_sections = [
+        "Income vs. Expense Transactions",
+        "Expense Categories",
+        "Subscription Summary",
+    ]
+
+    # Display a column of AI-generated financial insights.
+    def display_financial_insight_column(
+        financial_insight_axis,
+        financial_insight_sections
+    ):
+
+        # Set the starting vertical position.
+        vertical_position = 0.98
+
+        # Display every section assigned to this column.
+        for section_name in financial_insight_sections:
+
+            # Retrieve the generated section text.
+            section_text = financial_insights.get(
+                section_name
+            )
+
+            # Skip an optional section that was not generated.
+            if section_text is None:
+                continue
+
+            # Normalize the generated whitespace.
+            normalized_section_text = " ".join(
+                section_text.split()
+            )
+
+            # Escape dollar signs so Matplotlib does not treat the text as math.
+            normalized_section_text = (
+                normalized_section_text.replace("$", r"\$")
+            )
+
+            # Wrap the generated text to fit its column.
+            wrapped_section_text = textwrap.fill(
+                normalized_section_text,
+                width=75
+            )
+
+            # Display the section heading.
+            financial_insight_axis.text(
+                0.02,
+                vertical_position,
+                section_name,
+                transform=financial_insight_axis.transAxes,
+                fontsize=11,
+                fontweight="bold",
+                color="darkblue",
+                va="top"
+            )
+
+            # Move below the section heading.
+            vertical_position -= 0.055
+
+            # Display the generated section summary.
+            financial_insight_axis.text(
+                0.02,
+                vertical_position,
+                wrapped_section_text,
+                transform=financial_insight_axis.transAxes,
+                fontsize=7.5,
+                color="black",
+                va="top",
+                linespacing=1.25
+            )
+
+            # Count the wrapped lines in the section.
+            wrapped_line_count = (
+                wrapped_section_text.count("\n") + 1
+            )
+
+            # Move below the completed section.
+            vertical_position -= (
+                wrapped_line_count * 0.019
+            ) + 0.040
+
+    # Display the left column of AI financial insights.
+    display_financial_insight_column(
+        left_financial_insight_axis,
+        left_financial_insight_sections
+    )
+
+    # Display the right column of AI financial insights.
+    display_financial_insight_column(
+        right_financial_insight_axis,
+        right_financial_insight_sections
     )
 
     # Hide the financial summary axis lines and tick marks.
@@ -4219,6 +4389,12 @@ def create_financial_report(
         financial_table
     )
 
+    # Increase the financial table's row height.
+    financial_table.scale(
+        1.0,
+        1.40
+    )
+
     # Create the financial health summary.
     create_financial_health_summary(
         financial_health_axis,
@@ -4243,6 +4419,11 @@ def create_financial_report(
         expense_bars
     )
 
+    # Keep the chart title inside the chart card.
+    income_axis.title.set_position(
+        (0.5, 0.94)
+    )
+
     # Create the monthly income and expense transaction chart.
     (
     income_transaction_bars,
@@ -4265,6 +4446,36 @@ def create_financial_report(
         expense_transaction_bars,
         incoming_transfer_bars,
         outgoing_transfer_bars
+    )
+
+    # Expand the transaction chart card around its legend.
+    for chart_patch in transaction_axis.patches:
+        if isinstance(chart_patch, FancyBboxPatch):
+            chart_patch.set_bounds(
+                -0.02,
+                -0.48,
+                1.05,
+                1.65
+            )
+
+    # Keep the chart title inside the chart card.
+    transaction_axis.title.set_position(
+        (0.5, 0.94)
+    )
+
+    # Move the legend below the plotting area.
+    transaction_legend_handles, transaction_legend_labels = (
+        transaction_axis.get_legend_handles_labels()
+    )
+
+    transaction_axis.legend(
+        transaction_legend_handles,
+        transaction_legend_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.30),
+        ncol=3,
+        frameon=False,
+        fontsize=8
     )
 
     round_bar_tops(
@@ -4308,27 +4519,6 @@ def create_financial_report(
                 transaction_axis,
                 [base_bar]
             )
-    
-        # Adjust the spacing between the report sections.
-    report_figure.subplots_adjust(
-        top=0.84,
-        bottom=0.18,
-        hspace=0.35,
-        wspace=0.30
-    )
-
-    # Adjust the final spacing around the completed report.
-    report_figure.subplots_adjust(
-        top=0.84,
-        bottom=0.13,
-        hspace=0.55,
-        wspace=0.30
-    )
-
-# Create a separate figure for the expense-category pie chart.
-    expense_pie_figure, pie_axis = plt.subplots(
-        figsize=(10, 6)
-    )
 
     # Retrieve the expense categories that contain spending.
     category_labels = expense_category_totals.index.tolist()
@@ -4371,7 +4561,7 @@ def create_financial_report(
             percentage / 100
         ) * total_expense_amount
 
-        # Display both the dollar amount and percentage inside the slice.
+        # Display the dollar amount and percentage inside the slice.
         return (
             f"${category_amount:,.2f}\n"
             f"{percentage:.1f}%"
@@ -4384,20 +4574,24 @@ def create_financial_report(
         startangle=90,
         autopct=format_expense_slice,
         pctdistance=0.65,
+        radius=1.35,
+        center=(0, 0),
         wedgeprops={
             "edgecolor": "white",
             "linewidth": 1.5
         },
-        textprops={"color": "white", "weight": "bold"}
+        textprops={
+            "color": "white",
+            "weight": "bold"
+        }
     )
 
     # Style the values displayed inside each pie slice.
     for pie_value_label in pie_value_labels:
-        pie_value_label.set_fontsize(10)
+        pie_value_label.set_fontsize(8)
         pie_value_label.set_fontweight("bold")
 
-    # Convert the category totals into the structure expected
-    # by the existing pie-chart styling function.
+    # Convert the category totals into the expected structure.
     category_totals = expense_category_totals.to_dict()
 
     # Apply the existing expense pie-chart styling.
@@ -4408,105 +4602,54 @@ def create_financial_report(
         category_totals
     )
 
-    # Adjust the pie-chart layout so the legend remains visible.
-    expense_pie_figure.tight_layout()
-
-    # Create a separate report page for the AI financial insights.
-    financial_insight_figure = plt.figure(
-        figsize=(14, 10)
-    )
-
-    # Add the AI financial-insights page title.
-    financial_insight_figure.suptitle(
-        "AI Financial Insights",
-        fontsize=23,
-        fontweight="bold"
-    )
-
-    # Create the axis used to display the generated summaries.
-    financial_insight_axis = (
-        financial_insight_figure.add_subplot(111)
-    )
-
-    # Hide the AI financial-insights axis.
-    financial_insight_axis.axis("off")
-
-    # Set the initial vertical position for the first section.
-    current_vertical_position = 0.96
-
-    # Display every generated financial-insight section.
-    for section_name, section_text in financial_insights.items():
-
-        # Wrap the generated text so it remains inside the report page.
-        wrapped_section_text = textwrap.fill(
-            section_text,
-            width=120,
-            replace_whitespace=False
-        )
-
-        # Display the financial-insight section name.
-        financial_insight_axis.text(
-            0.03,
-            current_vertical_position,
-            section_name,
-            transform=financial_insight_axis.transAxes,
-            fontsize=13,
-            fontweight="bold",
-            color="darkblue",
-            va="top"
-        )
-
-        # Move below the section name.
-        current_vertical_position -= 0.035
-
-        # Display the generated section text.
-        financial_insight_axis.text(
-            0.03,
-            current_vertical_position,
-            wrapped_section_text,
-            transform=financial_insight_axis.transAxes,
-            fontsize=9,
-            color="black",
-            va="top",
-            wrap=True
-        )
-
-        # Estimate the space occupied by the generated text.
-        wrapped_line_count = (
-            wrapped_section_text.count("\n") + 1
-        )
-
-        # Move below the completed section.
-        current_vertical_position -= (
-            wrapped_line_count * 0.021
-        ) + 0.035
-
-    # Adjust the spacing around the AI-insights page.
-    financial_insight_figure.subplots_adjust(
-        top=0.91,
-        bottom=0.05,
+    # Adjust the spacing around the completed one-page report.
+    report_figure.subplots_adjust(
+        top=0.89,
+        bottom=0.04,
         left=0.05,
-        right=0.95
+        right=0.97,
+        hspace=0.40,
+        wspace=0.70
     )
 
+    # Shift the bar-chart cards right and preserve their separation.
+    income_axis_position = income_axis.get_position()
+    income_axis.set_position(
+        [
+            income_axis_position.x0 + 0.015,
+            income_axis_position.y0 + 0.018,
+            income_axis_position.width - 0.025,
+            income_axis_position.height - 0.018
+        ]
+    )
 
+    transaction_axis_position = transaction_axis.get_position()
+    transaction_axis.set_position(
+        [
+            transaction_axis_position.x0 + 0.010,
+            transaction_axis_position.y0 + 0.018,
+            transaction_axis_position.width - 0.020,
+            transaction_axis_position.height - 0.018
+        ]
+    )
+         
     # Display the completed financial report.
     plt.show()
 
     # Return the completed report figure.
-    return report_figure, financial_insight_figure
+    return report_figure
 
 # ============================================================
 # REPORT EXPORT FUNCTIONS
 # ============================================================
-def save_financial_report(report_figure,financial_insight_figure):
+def save_financial_report(report_figure):
 
     # Continue asking until the user provides a valid save choice.
     while True:
 
         # Ask the user whether the financial report should be saved.
         save_choice = input(
-            "Would you like to save this report as images? (Y/N): "
+            "Would you like to save this report as an image? (Y/N): "
         )
 
         # Begin the save process when the user enters Y.
@@ -4519,43 +4662,31 @@ def save_financial_report(report_figure,financial_insight_figure):
                 file_name = input("Please Enter The File Name: ")
                 file_name = file_name.strip()
 
-                # Display an error when the user enters an empty file name.
+                # Display an error when the file name is empty.
                 if file_name == "":
                     print("Must Enter A Valid Input.")
                     continue
 
-                else:
-                    # Create the main financial-report file name.
-                    financial_report_file_name = (
-                        file_name + "_financial_report.png"
-                    )
+                # Create the financial-report file name.
+                financial_report_file_name = (
+                    file_name + "_financial_report.png"
+                )
 
-                    # Save the main financial-report page.
-                    report_figure.savefig(
-                        financial_report_file_name,
-                        bbox_inches="tight"
-                    )
+                # Save the complete one-page financial report.
+                report_figure.savefig(
+                    financial_report_file_name,
+                    bbox_inches="tight"
+                )
 
-                    # Create the AI financial-insights file name.
-                    financial_insight_file_name = (
-                        file_name + "_ai_financial_insights.png"
-                    )
+                # Confirm that the report was saved.
+                print(
+                    "The financial report has been saved successfully."
+                )
 
-                    # Save the AI financial-insights report page.
-                    financial_insight_figure.savefig(
-                        financial_insight_file_name,
-                        bbox_inches="tight"
-                    )
+                # Finish the function after saving the report.
+                return
 
-                    # Confirm that both report pages were saved.
-                    print(
-                        "The financial report has been saved successfully."
-                    )
-
-                    # Finish the function after saving the report.
-                    return
-
-        # End the save process without saving when the user enters N.
+        # End without saving when the user enters N.
         elif save_choice.upper() == "N":
             break
 
@@ -4724,7 +4855,7 @@ def main():
         )
 
         # Create the completed financial report.
-        report_figure, financial_insight_figure = create_financial_report(
+        report_figure = create_financial_report(
             transaction_count,
             start_date,
             end_date,
@@ -4739,14 +4870,12 @@ def main():
             incoming_transfer_counts,
             outgoing_transfer_counts,
             expense_category_totals,
-            subscription_summary,
             financial_insights
         )
 
         # Ask the user whether the financial report should be saved.
         save_financial_report(
-            report_figure,
-            financial_insight_figure
+            report_figure
         )
 
    # Display a user-friendly message when an error occurs.
