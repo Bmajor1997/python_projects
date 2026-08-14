@@ -12,6 +12,10 @@ from pathlib import Path
 from tkinter import filedialog
 import tkinter as tk
 import numpy as np
+from openai import Openai
+from pydantic import BaseModel
+import os
+import json
 # ============================================================
 # APPLICATION INFORMATIONS
 # ============================================================
@@ -175,6 +179,222 @@ def open_xlsx(xlsx_path):
     # Return the successfully loaded XLSX data.
     return xlsx_file
 
+def select_xlsx_files():
+
+    """Open a file dialog and return the selected XLSX file paths."""
+
+    # Create and hide the main Tkinter window.
+    root = tk.Tk()
+    root.withdraw()
+
+    # Open the file dialog and allow the user to select
+    # one or more XLSX bank statements.
+    selected_files = filedialog.askopenfilenames(
+        title="Select Your Bank XLSX Files",
+        filetypes=xlsx_file_types
+    )
+
+    # Close the hidden Tkinter window after the dialog is finished.
+    root.destroy()
+
+    # Return None when the user closes the dialog
+    # without selecting any files.
+    if not selected_files:
+        return None
+
+    # Convert the Tkinter tuple into a list for downstream processing.
+    return list(selected_files)
+
+def combine_xlsx_files(selected_files):
+
+    """
+    Validate, open, standardize, and combine multiple bank statements.
+
+    Each statement is reduced to the transaction columns required by the
+    Financial Analyzer and those columns are standardized before the
+    statements are concatenated.
+    """
+
+    # Confirm that the selected files are stored in a supported collection.
+    if not isinstance(selected_files, (list, tuple)):
+        raise TypeError(
+            "Selected bank statements must be provided as a collection."
+        )
+
+    # Confirm that at least one statement was supplied.
+    if len(selected_files) == 0:
+        raise ValueError(
+            "At least one bank statement must be selected."
+        )
+
+    # Store each prepared statement before they are combined.
+    prepared_statements = []
+
+    # Process every selected bank statement.
+    for selected_file in selected_files:
+
+        # Validate the current XLSX file using the project's
+        # existing file validation function.
+        xlsx_path = validate_xlsx_file(
+            selected_file
+        )
+
+        # Open the validated bank statement.
+        statement_data = open_xlsx(
+            xlsx_path
+        )
+
+        # Stop processing when the statement could not be opened.
+        if statement_data is None:
+            raise ValueError(
+                f"Could not open bank statement: {xlsx_path.name}"
+            )
+
+        # Confirm that the statement contains transaction rows.
+        if statement_data.empty:
+            raise ValueError(
+                f"Bank statement contains no transaction rows: "
+                f"{xlsx_path.name}"
+            )
+
+        # Identify the transaction columns using the project's
+        # existing column-identification functions.
+        date_column_name = identify_date_column(
+            statement_data
+        )
+
+        description_column_name = (
+            identify_description_column(
+                statement_data
+            )
+        )
+
+        amount_column_name = identify_amount_column(
+            statement_data
+        )
+
+        # Confirm that the statement contains at least one
+        # usable transaction date.
+        determine_date_range(
+            statement_data,
+            date_column_name
+        )
+
+        # Retrieve only the columns required by the existing
+        # Financial Analyzer.
+        prepared_statement = statement_data[
+            [
+                date_column_name,
+                description_column_name,
+                amount_column_name
+            ]
+        ].copy()
+
+        # Standardize the required transaction column names.
+        # This allows statements from different banks to be
+        # combined even when their original headers differ.
+        prepared_statement = prepared_statement.rename(
+            columns={
+                date_column_name: "Date",
+                description_column_name: "Description",
+                amount_column_name: "Amount"
+            }
+        )
+
+        # Store the prepared statement.
+        prepared_statements.append(
+            prepared_statement
+        )
+
+    # Combine every prepared bank statement into one transaction dataset.
+    combined_statement = pd.concat(
+        prepared_statements,
+        ignore_index=True
+    )
+
+    # Confirm that transactions remain after the statements are combined.
+    if combined_statement.empty:
+        raise ValueError(
+            "The combined bank statements contain no transactions."
+        )
+
+    # Create temporary datetime values so statements can be placed
+    # into chronological transaction order.
+    transaction_dates = pd.to_datetime(
+        combined_statement["Date"],
+        errors="coerce"
+    )
+
+    # Sort the combined transactions chronologically while preserving
+    # rows whose dates could not be converted.
+    combined_statement = (
+        combined_statement
+        .assign(_transaction_date_sort=transaction_dates)
+        .sort_values(
+            "_transaction_date_sort",
+            na_position="last"
+        )
+        .drop(
+            columns="_transaction_date_sort"
+        )
+        .reset_index(
+            drop=True
+        )
+    )
+
+    # Return one DataFrame representing all selected statements.
+    return combined_statement
+
+def prepare_combined_statement(combined_statement):
+
+    """
+    Prepare the combined bank-statement DataFrame for the existing
+    Financial Analyzer calculations.
+    """
+
+    # Confirm that the combined statement is a pandas DataFrame.
+    if not isinstance(combined_statement, pd.DataFrame):
+        raise TypeError(
+            "Combined statement data must be provided as a pandas DataFrame."
+        )
+
+    # Confirm that the combined statement contains transactions.
+    if combined_statement.empty:
+        raise ValueError(
+            "The combined bank statement contains no transactions."
+        )
+
+    # Retrieve the standardized date column.
+    date_column_name = identify_date_column(
+        combined_statement
+    )
+
+    # Retrieve the standardized description column.
+    description_column_name = (
+        identify_description_column(
+            combined_statement
+        )
+    )
+
+    # Confirm that a supported amount column exists.
+    identify_amount_column(
+        combined_statement
+    )
+
+    # Determine the complete reporting period across
+    # every selected bank statement.
+    start_date, end_date = determine_date_range(
+        combined_statement,
+        date_column_name
+    )
+
+    # Return the information required by the existing analysis workflow.
+    return (
+        date_column_name,
+        description_column_name,
+        start_date,
+        end_date
+    )
 # ============================================================
 # COLUMN IDENTIFICATION FUNCTIONS
 # ============================================================
@@ -799,6 +1019,7 @@ def create_category_rule_map(user_category_identifiers):
 
     # Return the completed category rule map.
     return category_rule_map 
+
 def categorize_transactions(xlsx_file,description_column_name,transaction_types,transfer_subtypes,category_rule_map):
 
    # Define error messages for invalid or misaligned categorization data.
@@ -1818,8 +2039,58 @@ def prepare_financial_insight_data(
 
    return financial_insight_data
 def generate_financial_insights(financial_insight_data):
-    pass
 
+    class FinancialInsightResponse(BaseModel):
+
+    financial_summary_table: str
+    financial_health: str
+    monthly_income_expenses: str
+    income_expense_transactions: str
+
+
+    # Define the project-specific error raised when insight generation fails.
+    class FinancialInsightGenerationError(Exception):
+        pass
+
+
+    # Define the OpenAI model used to generate financial insights.
+    financial_insight_model = "gpt-5.6-terra"
+
+    # Define the maximum number of tokens allowed in the generated response.
+    maximum_financial_insight_output_tokens = 1500
+
+    openai_api_key = "OPENAI_API_KEY"
+    json_indentation = 4
+    required_disclaimer = "This summary is informational and not financial advice."
+
+    required_financial_insight_sections = {
+        "Reporting Period",
+        "Financial Summary Table",
+        "Financial Health",
+        "Monthly Income vs. Expenses",
+        "Income vs. Expense Transactions"
+    }
+
+    if not isinstance(financial_insight_data, dict):
+        raise TypeError("Daata must be a dictionary.")
+
+    if financial_insight_data is None:
+        raise ValueError("Financial insight data is empty.")
+
+    received_financial_insight_sections = set(financial_insight_data.keys())
+
+    if  received_financial_insight_sections != required_financial_insight_sections:
+        raise ValueError("Financial insight data must contain exactly the five required sections.")
+
+    #  GET openai_api_key from openai_api_key_environment_variable
+
+    if openai_api_key is None:
+        raise EnvironmentError("Open API key is missing.")
+
+    if openai_api_key.empty():
+        raise EnvironmentError("Open API key is empty.")
+
+    
 def validate_financial_insights(financial_insights):
     pass
 # ============================================================
@@ -2258,6 +2529,282 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     # Add the rounded card to the chart.
     income_axis.add_patch(card)
+
+def create_expense_pie_chart(
+    pie_axis,
+    descriptions,
+    amount_values,
+    transaction_types,
+):
+    """
+    Create a pie chart showing expenses grouped by spending category.
+
+    Parameters
+    ----------
+    pie_axis : matplotlib.axes.Axes
+        Axis where the expense pie chart will be created.
+
+    descriptions : list
+        Transaction descriptions aligned with amount_values
+        and transaction_types.
+
+    amount_values : list
+        Numeric transaction amounts.
+
+    transaction_types : list
+        Transaction classifications such as "Income" or "Expense".
+
+    Returns
+    -------
+    tuple
+        (
+            pie_wedges,
+            category_labels,
+            category_totals,
+        )
+    """
+
+    # Verify that all transaction collections contain the same
+    # number of records.
+    if not (
+        len(descriptions)
+        == len(amount_values)
+        == len(transaction_types)
+    ):
+        raise ValueError(
+            "Descriptions, amounts, and transaction types must have matching lengths."
+        )
+
+    # Define the keywords used to classify expense transactions.
+    expense_category_rule_map = {
+        "Groceries": [
+            "walmart",
+            "kroger",
+            "aldi",
+            "publix",
+            "safeway",
+            "whole foods",
+            "food lion",
+            "meijer",
+            "grocery",
+            "market",
+        ],
+        "Entertainment": [
+            "netflix",
+            "hulu",
+            "spotify",
+            "disney",
+            "cinema",
+            "theater",
+            "movie",
+            "gaming",
+            "steam",
+            "playstation",
+            "xbox",
+        ],
+        "Shopping": [
+            "amazon",
+            "target",
+            "ebay",
+            "etsy",
+            "best buy",
+            "mall",
+            "department store",
+        ],
+        "Restaurants": [
+            "mcdonald",
+            "wendy",
+            "burger king",
+            "taco bell",
+            "restaurant",
+            "doordash",
+            "ubereats",
+            "grubhub",
+            "starbucks",
+        ],
+        "Transportation": [
+            "shell",
+            "speedway",
+            "exxon",
+            "chevron",
+            "bp ",
+            "gas",
+            "uber",
+            "lyft",
+            "parking",
+        ],
+        "Bills & Utilities": [
+            "electric",
+            "water",
+            "internet",
+            "phone",
+            "utility",
+            "insurance",
+        ],
+    }
+
+    # Start every category at zero.
+    category_totals = {
+        category_name: 0.0
+        for category_name in expense_category_rule_map
+    }
+
+    # Expenses that do not match a known category are placed here.
+    category_totals["Other Expenses"] = 0.0
+
+    # Examine every transaction.
+    for description, amount, transaction_type in zip(
+        descriptions,
+        amount_values,
+        transaction_types,
+    ):
+
+        # Ignore transactions that are not expenses.
+        if str(transaction_type).strip().lower() != "expense":
+            continue
+
+        normalized_description = str(description).strip().lower()
+
+        # Expenses are displayed as positive values.
+        expense_amount = abs(float(amount))
+
+        matched_category = None
+
+        # Search the category rules for a matching keyword.
+        for category_name, category_keywords in (
+            expense_category_rule_map.items()
+        ):
+            if any(
+                keyword in normalized_description
+                for keyword in category_keywords
+            ):
+                matched_category = category_name
+                break
+
+        # Use Other Expenses when no rule matches.
+        if matched_category is None:
+            matched_category = "Other Expenses"
+
+        category_totals[matched_category] += expense_amount
+
+    # Remove categories that had no expenses.
+    category_totals = {
+        category_name: round(category_total, 2)
+        for category_name, category_total in category_totals.items()
+        if round(category_total, 2) > 0
+    }
+
+    if not category_totals:
+        raise ValueError(
+            "No expense transactions are available for the pie chart."
+        )
+
+    category_labels = list(category_totals.keys())
+    category_values = list(category_totals.values())
+
+    # Bright colors for the individual expense categories.
+    bright_colors = [
+        "#00BFFF",  # Bright blue
+        "#FF4D6D",  # Bright pink/red
+        "#FFD60A",  # Bright yellow
+        "#32CD32",  # Bright green
+        "#FF8C00",  # Bright orange
+        "#9D4EDD",  # Bright purple
+        "#00CED1",  # Bright turquoise
+    ]
+
+    # Repeat the color palette if more categories are eventually added.
+    pie_colors = [
+        bright_colors[index % len(bright_colors)]
+        for index in range(len(category_labels))
+    ]
+
+    pie_wedges, _ = pie_axis.pie(
+        category_values,
+        colors=pie_colors,
+        startangle=90,
+        wedgeprops={
+            "edgecolor": "white",
+            "linewidth": 1.5,
+        },
+    )
+
+    return (
+        pie_wedges,
+        category_labels,
+        category_totals,
+    )
+
+
+def style_expense_pie_chart(
+    pie_axis,
+    pie_wedges,
+    category_labels,
+    category_totals,
+):
+    """
+    Apply presentation styling to the expense-category pie chart.
+
+    Parameters
+    ----------
+    pie_axis : matplotlib.axes.Axes
+        Axis containing the pie chart.
+
+    pie_wedges : list
+        Pie-chart wedges returned by create_expense_pie_chart().
+
+    category_labels : list
+        Names of the expense categories represented by the wedges.
+
+    category_totals : dict
+        Expense totals for each displayed category.
+    """
+
+    if len(pie_wedges) != len(category_labels):
+        raise ValueError(
+            "Pie wedges and category labels must have matching lengths."
+        )
+
+    pie_axis.set_title(
+        "Expense Categories",
+        fontsize=13,
+        fontweight="bold",
+        pad=15,
+    )
+
+    total_expenses = sum(category_totals.values())
+
+    legend_labels = []
+
+    # Build detailed labels containing category, dollar amount,
+    # and percentage of overall expenses.
+    for category_name in category_labels:
+
+        category_total = category_totals[category_name]
+
+        category_percentage = (
+            category_total / total_expenses
+        ) * 100
+
+        legend_labels.append(
+            f"{category_name}: "
+            f"${category_total:,.2f} "
+            f"({category_percentage:.1f}%)"
+        )
+
+    pie_axis.legend(
+        pie_wedges,
+        legend_labels,
+        title="Expense Breakdown",
+        loc="center left",
+        bbox_to_anchor=(1.0, 0.5),
+        frameon=False,
+        fontsize=9,
+        title_fontsize=10,
+    )
+
+    # Keep the pie circular regardless of the surrounding figure size.
+    pie_axis.set_aspect("equal")
 
 # ============================================================
 # TRANSACTION-COUNT CHART FUNCTIONS
