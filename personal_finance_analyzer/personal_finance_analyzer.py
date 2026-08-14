@@ -32,29 +32,19 @@ welcome_message = (
 # ============================================================
 # ERROR MESSAGES
 # ============================================================
-file_not_found_error = "The selected file could not be found."
 no_file_selected_error = "No file path was provided."
 invalid_file_type_error = "The selected file is not a XLSX file."
 empty_file_error = "The selected XLSX file is empty."
-missing_columns_error = "The XLSX file is missing one or more required columns."
-invalid_bank_file_error = "The selected file is not a valid bank transaction."
-invalid_transaction_data_error = (
-    "The transaction data contains invalid values. "
-    "Please correct the XLSX and try again."
-)
 xlsx_open_error = "File could not be opened."
 # ============================================================
 # FILE DIALOG CONSTANTS
 # ============================================================
 file_dialog_title = "Select Your Bank XLSX File"
 xlsx_file_types = [("XLSX Files", "*.xlsx")]
-no_file_selected_message = (
-    "No file was selected.\n\n"
-    "Please select a bank XLSX file to continue."
-)
-#=============================================================
+# ============================================================
 # GLOBAL CONSTANTS
-#=============================================================
+# ============================================================
+# Financial-health statuses.
 very_healthy_status = "Very Healthy"
 healthy_status = "Healthy"
 needs_attention_status = "Needs Attention"
@@ -64,11 +54,14 @@ at_risk_status = "At Risk"
 very_weak_status = "Very Weak"
 unable_to_determine_status = "Unable to Determine"
 
+
+# Transaction types.
 income_transaction_type = "Income"
 expense_transaction_type = "Expense"
-transfer_transaction_type = "Transfer"
 zero_amount_transaction_type = "Zero Amount"
 
+
+# Transfer identifiers.
 default_transfer_identifiers = [
     "internal transfer",
     "account transfer"
@@ -77,16 +70,20 @@ default_transfer_identifiers = [
 user_transfer_identifiers = [
     "moneylink"
 ]
+
+# Transfer subtypes.
 not_a_transfer = "Not a Transfer"
 personal_transfer = "Personal Transfer"
 owned_account_transfer = "Owned-Account Transfer"
 unclassified_transfer = "Unclassified Transfer"
+
+
+# Fallback categories.
 other_income_category = "Other Income"
 other_expense_category = "Other Expense"
-income_transaction_type = "Income"
-expense_transaction_type = "Expense"
-zero_amount_transaction_type = "Zero Amount"
 
+
+# Expense categories.
 housing_category = "Housing"
 utilities_category = "Utilities"
 healthcare_category = "Healthcare"
@@ -95,8 +92,14 @@ groceries_category = "Groceries"
 dining_category = "Dining"
 entertainment_category = "Entertainment"
 shopping_category = "Shopping"
+
+
+# Income categories.
 employment_income_category = "Employment Income"
 refund_reimbursement_category = "Refund or Reimbursement"
+
+
+# Transfer categories.
 incoming_transfers_category = "Incoming Transfers"
 outgoing_transfers_category = "Outgoing Transfers"
 # ============================================================
@@ -2038,6 +2041,7 @@ def prepare_financial_insight_data(
    } 
 
    return financial_insight_data
+
 def generate_financial_insights(financial_insight_data):
 
     class FinancialInsightResponse(BaseModel):
@@ -2734,7 +2738,6 @@ def create_expense_pie_chart(
         category_labels,
         category_totals,
     )
-
 
 def style_expense_pie_chart(
     pie_axis,
