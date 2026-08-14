@@ -2,24 +2,47 @@
 Project Name: Personal Finance Analyzer
 
 Description:
-This project is designed to strengthen my Python programming skills by
-building a personal finance application that analyzes bank-exported CSV
-files. The application allows users to select a transaction file, validates
-the data, identifies important financial information, calculates summaries,
-and generates visual reports of monthly income, expenses, and transaction
-activity. The project provides hands-on experience working with real-world
-financial data while developing skills in file handling, data validation,
-data analysis with Pandas, and data visualization with Matplotlib.
+This project is a Python-based personal finance application designed to
+analyze bank-exported XLSX transaction statements and transform raw
+transaction data into structured financial insights. The application
+supports multiple bank statements, validates and combines transaction data,
+classifies income, expenses, and transfers, categorizes transactions,
+calculates financial and monthly summaries, evaluates financial health,
+identifies subscription spending, and generates visual financial reports.
+
+The application also uses AI to generate structured financial insights from
+the calculated financial data. The project provides hands-on experience with
+real-world financial data while developing skills in Python programming,
+file handling, data validation, Pandas data analysis, Matplotlib data
+visualization, financial-data modeling, AI integration, and software
+engineering.
 
 Objectives:
-- Verify that a bank transaction CSV file can be selected and loaded successfully.
-- Verify that the selected file is a valid, non-empty CSV file.
-- Verify that required date and amount columns are identified correctly.
-- Verify that transaction dates are processed and the reporting period is determined accurately.
-- Verify that transaction amounts are cleaned and converted into numeric values.
-- Verify that total income, total expenses, net balance, and transaction count are calculated correctly.
-- Verify that monthly financial summaries are generated accurately.
-- Verify that monthly income, expense, and transaction charts are displayed correctly.
-- Verify that users can save generated charts as image files.
-- Verify that invalid, missing, or incomplete transaction data is handled safely with appropriate error messages.
+- Verify that one or more bank-exported XLSX statements can be selected,
+  validated, opened, and combined successfully.
+- Verify that required transaction columns are identified correctly.
+- Verify that transaction dates are processed and the reporting period is
+  determined accurately.
+- Verify that transaction amounts are cleaned and converted into valid
+  numeric values.
+- Verify that transactions are classified correctly as income, expenses,
+  transfers, or zero-amount transactions.
+- Verify that transactions are assigned to the appropriate financial
+  categories.
+- Verify that total income, total expenses, net balance, and transaction
+  count are calculated correctly.
+- Verify that monthly income, expense, transfer, and transaction summaries
+  are calculated accurately.
+- Verify that financial health and savings rate are determined correctly.
+- Verify that known subscription payments are identified and summarized
+  correctly.
+- Verify that financial summary tables and charts are generated and styled
+  correctly.
+- Verify that financial data is prepared and validated correctly before
+  being provided to the AI model.
+- Verify that AI-generated financial insights follow the required structure
+  and use only the prepared financial data.
+- Verify that generated financial reports can be saved successfully.
+- Verify that invalid, missing, or inconsistent financial data is handled
+  safely with appropriate exceptions and error messages.
 """
