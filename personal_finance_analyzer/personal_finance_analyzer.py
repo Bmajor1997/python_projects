@@ -144,6 +144,7 @@ known_subscription_identifiers = {
     "planet fitness": "Planet Fitness",
     "peloton": "Peloton",
 }
+
 # ============================================================
 # DISPLAY FUNCTIONS
 # ============================================================
@@ -163,18 +164,20 @@ def display_welcome_screen():
 # ============================================================
 # FILE SELECTION AND VALIDATION FUNCTIONS
 # ============================================================
-def select_xlsx_file():
+def select_excel_file():
 
-    """Open a file dialog and return the path of the selected XLSX file."""
+    """Open a file dialog and return a selected XLSX or XLS file path."""
 
     # Create and hide the main Tkinter window.
     root = tk.Tk()
     root.withdraw()
 
-    # Open the file dialog and restrict the available file type to XLSX.
+    # Open the file dialog and restrict the available types to Excel files.
     selected_file = filedialog.askopenfilename(
-        title=file_dialog_title,
-        filetypes=xlsx_file_types
+        title="Select Your Bank Excel File",
+        filetypes=(
+            ("Excel files", ("*.xlsx", "*.xls")),
+        )
     )
 
     # Close the hidden Tkinter window after the dialog is finished.
@@ -184,60 +187,85 @@ def select_xlsx_file():
     if not selected_file:
         return None
 
-    # Return the path of the selected XLSX file.
+    # Return the path of the selected Excel file.
     return selected_file
 
-def validate_xlsx_file(selected_file):
+def validate_excel_file(selected_file):
     
-    """Validate the selected XLSX file and return its Path object."""
+    """Validate a selected XLSX or XLS file and return its Path object."""
 
     # Convert the selected file path into a Path object.
-    xlsx_path = Path(selected_file)
+    excel_path = Path(selected_file)
 
     # Confirm that the selected file exists.
-    if not xlsx_path.exists():
+    if not excel_path.exists():
         raise Exception(no_file_selected_error)
 
-    # Confirm that the selected file uses the XLSX extension.
-    if xlsx_path.suffix != ".xlsx":
-        raise Exception(invalid_file_type_error)
+    # Confirm that the selected file uses a supported Excel extension.
+    supported_excel_extensions = {".xlsx", ".xls"}
+
+    if excel_path.suffix.lower() not in supported_excel_extensions:
+        raise ValueError(
+            "Unsupported file type. Select an XLSX or XLS bank statement."
+        )
 
     # Confirm that the selected file contains data.
-    if xlsx_path.stat().st_size == 0:
+    if excel_path.stat().st_size == 0:
         raise Exception(empty_file_error)
 
-    # Return the validated XLSX file path.
-    return xlsx_path
+    # Return the validated Excel file path.
+    return excel_path
 
-def open_xlsx(xlsx_path):
+def open_excel_file(excel_path):
 
-    """Open an XLSX file and return its contents as a pandas DataFrame."""
+    """Open an XLSX or XLS file and return a pandas DataFrame."""
 
-    # Attempt to read the XLSX file into a pandas DataFrame.
+    # Select the reader required by the validated Excel file type.
+    excel_extension = excel_path.suffix.lower()
+    excel_engine = (
+        "openpyxl"
+        if excel_extension == ".xlsx"
+        else "xlrd"
+    )
+
+    # Attempt to read the Excel file into a pandas DataFrame.
     try:
-        xlsx_file = pd.read_excel(xlsx_path)
+        statement_data = pd.read_excel(
+            excel_path,
+            engine=excel_engine
+        )
 
-    # Display a user-friendly message if the file cannot be opened.
-    except Exception:
-        print(xlsx_open_error)
-        return None
+    # Explain which optional dependency is missing without hiding its cause.
+    except ImportError as original_error:
+        raise ImportError(
+            f"The {excel_engine} package is required to open "
+            f"{excel_extension} files. Install it and try again."
+        ) from original_error
 
-    # Return the successfully loaded XLSX data.
-    return xlsx_file
+    # Preserve the reader's diagnostic information for invalid files.
+    except Exception as original_error:
+        raise ValueError(
+            f"Could not open bank statement: {excel_path.name}"
+        ) from original_error
 
-def select_xlsx_files():
+    # Return the successfully loaded Excel data.
+    return statement_data
 
-    """Open a file dialog and return the selected XLSX file paths."""
+def select_excel_files():
+
+    """Open a file dialog and return selected XLSX and XLS file paths."""
 
     # Create and hide the main Tkinter window.
     root = tk.Tk()
     root.withdraw()
 
     # Open the file dialog and allow the user to select
-    # one or more XLSX bank statements.
+    # one or more XLSX or XLS bank statements.
     selected_files = filedialog.askopenfilenames(
-        title="Select Your Bank XLSX Files",
-        filetypes=xlsx_file_types
+        title="Select Your Bank Excel Files",
+        filetypes=(
+            ("Excel files", ("*.xlsx", "*.xls")),
+        )
     )
 
     # Close the hidden Tkinter window after the dialog is finished.
@@ -251,7 +279,7 @@ def select_xlsx_files():
     # Convert the Tkinter tuple into a list for downstream processing.
     return list(selected_files)
 
-def combine_xlsx_files(selected_files):
+def combine_excel_files(selected_files):
 
     """
     Validate, open, standardize, and combine multiple bank statements.
@@ -279,28 +307,22 @@ def combine_xlsx_files(selected_files):
     # Process every selected bank statement.
     for selected_file in selected_files:
 
-        # Validate the current XLSX file using the project's
+        # Validate the current Excel file using the project's
         # existing file validation function.
-        xlsx_path = validate_xlsx_file(
+        excel_path = validate_excel_file(
             selected_file
         )
 
         # Open the validated bank statement.
-        statement_data = open_xlsx(
-            xlsx_path
+        statement_data = open_excel_file(
+            excel_path
         )
-
-        # Stop processing when the statement could not be opened.
-        if statement_data is None:
-            raise ValueError(
-                f"Could not open bank statement: {xlsx_path.name}"
-            )
 
         # Confirm that the statement contains transaction rows.
         if statement_data.empty:
             raise ValueError(
                 f"Bank statement contains no transaction rows: "
-                f"{xlsx_path.name}"
+                f"{excel_path.name}"
             )
 
         # Identify the transaction columns using the project's
@@ -2953,11 +2975,11 @@ def create_monthly_income_expenses_chart(
     expense_totals
 ):
 
-    # Set the width of each bar.
-    bar_width = 0.20
+        # Set the width of each bar.
+    bar_width = 0.15
 
     # Set the amount of space between the income and expense bars.
-    bar_gap = 0.23 
+    bar_gap = 0.14  
     
     # Calculate the central x-axis position for each month.
     x_positions = np.arange(len(months))
@@ -3058,7 +3080,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     for income_bar in income_bars:
         bar_height = income_bar.get_height()
         bar_center = (income_bar.get_x() + income_bar.get_width() / 2)
-        formatted_value = f"{bar_height:,.0f}"
+        formatted_value = f"${bar_height:,.0f}"
         income_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -3073,7 +3095,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     for expense_bar in expense_bars:
         bar_height = expense_bar.get_height()
         bar_center = (expense_bar.get_x() + expense_bar.get_width() / 2)
-        formatted_value = f"{bar_height:,.0f}"
+        formatted_value = f"${bar_height:,.0f}"
         income_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -3385,8 +3407,8 @@ def create_monthly_income_expense_transaction_chart(
     )
 
     x_positions = np.arange(len(months))
-    bar_width = 0.20
-    bar_gap = 0.10
+    bar_width = 0.15
+    bar_gap = 0.07
 
     income_positions = x_positions - ((bar_width + bar_gap) / 2)
     expense_positions = x_positions + ((bar_width + bar_gap) / 2)
@@ -4463,7 +4485,7 @@ def save_financial_report(report_figure):
 
                 # Create the financial-report file name.
                 financial_report_file_name = (
-                    file_name + "_financial_report.pdf"
+                    file_name + "_financial_report.png"
                 )
 
                 # Save the complete one-page financial report.
@@ -4508,7 +4530,7 @@ def main():
     display_welcome_screen()
 
     # Open the file dialog and retrieve the selected bank statements.
-    selected_files = select_xlsx_files()
+    selected_files = select_excel_files()
 
     # Stop the program when the user does not select any files.
     if selected_files is None:
@@ -4519,7 +4541,7 @@ def main():
     try:
 
         # Validate, open, standardize, and combine the selected statements.
-        xlsx_file = combine_xlsx_files(
+        xlsx_file = combine_excel_files(
             selected_files
         )
 
