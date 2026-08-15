@@ -2896,7 +2896,7 @@ def validate_financial_insights(financial_insights):
         )
 
     return financial_insights
-    
+   
 # ============================================================
 # FINANCIAL HEALTH  FUNCTIONS
 # ============================================================
@@ -4265,6 +4265,45 @@ def create_financial_report(
         financial_insight_sections
     ):
 
+        # Draw the figure so text spacing can be calculated.
+        report_figure.canvas.draw()
+
+        # Retrieve the renderer used to measure the axis.
+        renderer = report_figure.canvas.get_renderer()
+
+        # Measure the height of the insight axis in pixels.
+        axis_height_pixels = (
+            financial_insight_axis.get_window_extent(
+                renderer=renderer
+            ).height
+        )
+
+        # Define the text formatting values.
+        heading_font_size = 11
+        body_font_size = 7.5
+        body_line_spacing = 1.25
+
+        # Convert the font sizes into axis-coordinate spacing.
+        heading_height = (
+            heading_font_size
+            * report_figure.dpi
+            / 72
+            * 1.20
+            / axis_height_pixels
+        )
+
+        body_line_height = (
+            body_font_size
+            * report_figure.dpi
+            / 72
+            * body_line_spacing
+            / axis_height_pixels
+        )
+
+        # Define the space between text elements.
+        heading_body_gap = 0.012
+        section_gap = 0.025
+
         # Set the starting vertical position.
         vertical_position = 0.98
 
@@ -4285,15 +4324,22 @@ def create_financial_report(
                 section_text.split()
             )
 
-            # Escape dollar signs so Matplotlib does not treat the text as math.
+            # Escape dollar signs so Matplotlib does not
+            # interpret them as mathematical expressions.
             normalized_section_text = (
                 normalized_section_text.replace("$", r"\$")
             )
 
             # Wrap the generated text to fit its column.
-            wrapped_section_text = textwrap.fill(
+            wrapped_lines = textwrap.wrap(
                 normalized_section_text,
-                width=75
+                width=75,
+                break_long_words=False,
+                break_on_hyphens=False
+            )
+
+            wrapped_section_text = "\n".join(
+                wrapped_lines
             )
 
             # Display the section heading.
@@ -4302,14 +4348,18 @@ def create_financial_report(
                 vertical_position,
                 section_name,
                 transform=financial_insight_axis.transAxes,
-                fontsize=11,
+                fontsize=heading_font_size,
                 fontweight="bold",
                 color="darkblue",
+                ha="left",
                 va="top"
             )
 
             # Move below the section heading.
-            vertical_position -= 0.055
+            vertical_position -= (
+                heading_height
+                + heading_body_gap
+            )
 
             # Display the generated section summary.
             financial_insight_axis.text(
@@ -4317,21 +4367,19 @@ def create_financial_report(
                 vertical_position,
                 wrapped_section_text,
                 transform=financial_insight_axis.transAxes,
-                fontsize=7.5,
+                fontsize=body_font_size,
                 color="black",
+                ha="left",
                 va="top",
-                linespacing=1.25
+                linespacing=body_line_spacing
             )
 
-            # Count the wrapped lines in the section.
-            wrapped_line_count = (
-                wrapped_section_text.count("\n") + 1
-            )
-
-            # Move below the completed section.
+            # Move below the completed paragraph.
             vertical_position -= (
-                wrapped_line_count * 0.019
-            ) + 0.040
+                len(wrapped_lines)
+                * body_line_height
+                + section_gap
+            )
 
     # Display the left column of AI financial insights.
     display_financial_insight_column(
@@ -4632,7 +4680,7 @@ def create_financial_report(
             transaction_axis_position.height - 0.018
         ]
     )
-         
+
     # Display the completed financial report.
     plt.show()
 
