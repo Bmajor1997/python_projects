@@ -1,18 +1,52 @@
 """
 SETUP
 
-1. Install Python (if not already installed).
-2. Open the project in PyCharm.
-3. Create and activate a virtual environment (.venv).
-4. Create a requirements.txt file and install all required project dependencies.
-5. Export your bank transaction history as a CSV file.
-6. Save the exported CSV file to a location on your computer.
-7. Run the application.
-8. When prompted, select your bank CSV file using the file selection dialog.
-9. The application will validate the selected file and verify the required transaction data.
-10. After successful validation, the application will:
-      - Determine the reporting period.
-      - Calculate your financial summary.
-      - Generate monthly financial charts.
-11. Choose whether you would like to save the generated charts as image files.
+Install Python from https://www.python.org/downloads/ if it is not already installed.
+During installation, select "Add python.exe to PATH."
+Open the project folder in Visual Studio Code.
+Open the Visual Studio Code terminal.
+
+Create a virtual environment:
+
+py -m venv .venv
+
+Activate the virtual environment in PowerShell:
+
+..venv\Scripts\Activate.ps1
+
+Install the required project dependencies:
+
+py -m pip install -r requirements.txt
+
+The Excel dependencies should include:
+
+openpyxl>=3.1.0
+xlrd>=2.0.1
+
+openpyxl reads modern .xlsx files.
+xlrd reads legacy .xls files.
+Export your bank transaction history as an Excel file.
+Save the exported bank statement as either:
+An .xlsx file
+An .xls file
+
+Run the application:
+
+py your_program_name.py
+
+When prompted, select one or more bank statement files using the file-selection dialog.
+
+The application accepts:
+
+.xlsx files
+.xls files
+Any valid combination of .xlsx and .xls files
+The application will validate the selected files and verify that they contain the required transaction data.
+After successful validation, the application will:
+Combine the selected bank statements.
+Determine the reporting period.
+Calculate the financial summary.
+Generate the monthly financial charts.
+Generate the AI financial insights.
+Choose whether you would like to save the completed financial report as an image file.
 """
