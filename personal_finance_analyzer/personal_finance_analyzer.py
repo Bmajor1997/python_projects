@@ -4,7 +4,7 @@
 # ============================================================
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, PathPatch, 
+from matplotlib.patches import FancyBboxPatch, PathPatch 
 from pathlib import Path
 from matplotlib.path import Path as MplPath
 from pathlib import Path
