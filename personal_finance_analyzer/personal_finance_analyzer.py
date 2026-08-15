@@ -4463,7 +4463,7 @@ def save_financial_report(report_figure):
 
                 # Create the financial-report file name.
                 financial_report_file_name = (
-                    file_name + "_financial_report.png"
+                    file_name + "_financial_report.pdf"
                 )
 
                 # Save the complete one-page financial report.
