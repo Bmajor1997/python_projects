@@ -4,14 +4,14 @@
 # ============================================================
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, PathPatch, Rectangle
+from matplotlib.patches import FancyBboxPatch, PathPatch, 
 from pathlib import Path
 from matplotlib.path import Path as MplPath
 from pathlib import Path
 from tkinter import filedialog
 import tkinter as tk
 import numpy as np
-from openai import OpenAI, APIError
+from openai import OpenAI,
 from pydantic import BaseModel, ValidationError
 import os
 import json
