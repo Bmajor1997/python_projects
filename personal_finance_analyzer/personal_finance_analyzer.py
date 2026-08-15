@@ -17,6 +17,27 @@ import os
 import json
 from typing import Optional
 import textwrap
+from dotenv import load_dotenv
+from pathlib import Path
+
+#=============================================================
+# HELPER
+#=============================================================
+environment_file = (
+    Path(__file__).resolve().parent / ".env"
+)
+
+if not environment_file.exists():
+    raise FileNotFoundError(
+        f"The .env file was not found at: "
+        f"{environment_file}"
+    )
+
+load_dotenv(
+    dotenv_path=environment_file,
+    override=True
+)
+
 # ============================================================
 # APPLICATION INFORMATIONS
 # ============================================================
@@ -45,16 +66,6 @@ xlsx_file_types = [("XLSX Files", "*.xlsx")]
 # ============================================================
 # GLOBAL CONSTANTS
 # ============================================================
-# Financial-health statuses.
-very_healthy_status = "Very Healthy"
-healthy_status = "Healthy"
-needs_attention_status = "Needs Attention"
-caution_status = "Caution"
-weak_status = "Weak"
-at_risk_status = "At Risk"
-very_weak_status = "Very Weak"
-unable_to_determine_status = "Unable to Determine"
-
 # Transaction types.
 income_transaction_type = "Income"
 expense_transaction_type = "Expense"
@@ -1461,12 +1472,41 @@ def calculate_financial_summary(xlsx_file,description_column_name):
         total_income + total_expenses
     )
 
+    # Confirm that the values required for the savings rate are numeric.
+    for financial_value in (total_income, net_balance):
+        if (
+            isinstance(financial_value, (bool, np.bool_))
+            or not isinstance(
+                financial_value,
+                (int, float, np.integer, np.floating)
+            )
+        ):
+            raise TypeError(
+                "Total income and net balance must be numeric."
+            )
+
+        if not np.isfinite(financial_value):
+            raise ValueError(
+                "Total income and net balance must be finite."
+            )
+
+    # Calculate the percentage of income remaining after expenses.
+    if total_income == 0:
+        savings_rate = None
+
+    else:
+        savings_rate = round(
+            (net_balance / total_income) * 100,
+            2
+        )
+
     # Return the complete financial summary and transaction data.
     return (
         transaction_count,
         total_income,
         total_expenses,
         net_balance,
+        savings_rate,
         amount_values,
         transaction_types
     )
@@ -2111,48 +2151,28 @@ def calculate_subscription_summary(
 def prepare_financial_insight_data(
     financial_summary,
     monthly_summary,
-    financial_health_summary,
     reporting_period,
     expense_category_totals,
     subscription_summary
 ):
 
-    required_financial_summary_length = 6
-    required_financial_health_summary_length = 2 
+    required_financial_summary_length = 7
     required_monthly_summary_length = 7
     required_reporting_period_length = 2
     date_display_format = "%B %d, %Y"
-    unavailable_savings_rate_text = "N/A"
-
-    financial_health_status_map = {
-        "very healthy": "Very Healthy",
-        "healthy": "Healthy",
-        "needs attention": "Needs Attention",
-        "caution": "Caution",
-        "weak": "Weak",
-        "at risk": "At Risk",
-        "very weak": "Very Weak",
-        "unable to determine": "Unable to Determine"
-    } 
 
 
     if not isinstance(financial_summary, tuple):
         raise TypeError("Financial summary must be provided as a tuple.")
 
     if len(financial_summary) != required_financial_summary_length:
-        raise ValueError("Financial summary must contain six values.")
+        raise ValueError("Financial summary must contain seven values.")
        
     if not isinstance(monthly_summary, tuple):
         raise TypeError("Monthly summary must be provided as a tuple.")
 
     if len(monthly_summary) != required_monthly_summary_length:
         raise ValueError("Monthly summary must have a legth of seven.")
-
-    if not isinstance(financial_health_summary, tuple):
-        raise TypeError("Financial health summary must be provided as a tuple.")
-
-    if len(financial_health_summary) != required_financial_health_summary_length:
-        raise ValueError("Financial health summary must have two values.")
 
     if not isinstance(reporting_period, tuple):
         raise TypeError("Reporting period must be provided as a tuple.")
@@ -2203,6 +2223,7 @@ def prepare_financial_insight_data(
         total_income,
         total_expenses,
         net_balance,
+        savings_rate,
         amount_values,
         transaction_types
     ) = financial_summary
@@ -2218,12 +2239,6 @@ def prepare_financial_insight_data(
         income_transfer_counts,
         expense_transfer_counts
     ) = monthly_summary
-
-    # Retrieve the Financial Health values.
-    (
-        financial_health,
-        savings_rate
-    ) = financial_health_summary
 
     # Retrieve the reporting-period dates.
     (
@@ -2246,25 +2261,6 @@ def prepare_financial_insight_data(
     formatted_end_date = end_date.strftime(
         date_display_format
     )
-
-    # Normalize the Financial Health status.
-    if not isinstance(financial_health, str):
-        raise TypeError("Financial Health status must be text.")
-
-    financial_health_key = (financial_health.strip().casefold())
-
-    if financial_health_key not in financial_health_status_map:
-        raise ValueError("Financial Health contains an unsupported status.")
-
-    normalized_financial_health = (
-        financial_health_status_map[financial_health_key]
-    )
-
-    if savings_rate is None:
-        formatted_savings_rate = unavailable_savings_rate_text
-
-    else:
-        formatted_savings_rate = f"{savings_rate:,.2f}%"
 
     formatted_total_income = f"${total_income:,.2f}"
     formatted_total_expenses = (f"${abs(total_expenses):,.2f}")
@@ -2442,13 +2438,13 @@ def prepare_financial_insight_data(
         "Transaction Count": transaction_count,
         "Total Income": formatted_total_income,
         "Total Expenses": formatted_total_expenses,
-        "Net Balance": formatted_net_balance
+        "Net Balance": formatted_net_balance,
+        "Savings Rate": (
+            "N/A"
+            if savings_rate is None
+            else f"{savings_rate:,.2f}%"
+        )
     }       
-
-    financial_health_section = {
-        "Status": normalized_financial_health,
-        "Savings Rate": formatted_savings_rate
-    }
 
     # Store the completed monthly income and expense records.
     monthly_income_expense_section = {
@@ -2569,7 +2565,6 @@ def prepare_financial_insight_data(
     financial_insight_data = {
         "Reporting Period": reporting_period_section,
         "Financial Summary Table": financial_summary_table_section,
-        "Financial Health": financial_health_section,
         "Monthly Income vs. Expenses": monthly_income_expense_section,
         "Income vs. Expense Transactions": income_expense_transaction_section
     }
@@ -2593,7 +2588,6 @@ def generate_financial_insights(financial_insight_data):
     class FinancialInsightResponse(BaseModel):
 
         financial_summary_table: str
-        financial_health: str
         monthly_income_expenses: str
         income_expense_transactions: str
         expense_categories: str
@@ -2621,7 +2615,6 @@ def generate_financial_insights(financial_insight_data):
     required_financial_insight_sections = {
         "Reporting Period",
         "Financial Summary Table",
-        "Financial Health",
         "Monthly Income vs. Expenses",
         "Income vs. Expense Transactions",
         "Expense Categories",
@@ -2681,13 +2674,12 @@ def generate_financial_insights(financial_insight_data):
         Use impersonal report wording, such as "the account recorded" and
         "the reporting period showed."
 
-        Return content for five required financial-insight sections:
+        Return content for four required financial-insight sections:
 
         1. Financial Summary Table
-        2. Financial Health
-        3. Monthly Income vs. Expenses
-        4. Income vs. Expense Transactions
-        5. Expense Categories
+        2. Monthly Income vs. Expenses
+        3. Income vs. Expense Transactions
+        4. Expense Categories
 
         If Subscription Summary data is supplied, also return content for the
         Subscription Summary section. Otherwise, return null for that field.
@@ -2698,6 +2690,9 @@ def generate_financial_insights(financial_insight_data):
         - Do not create a separate reporting-period output section.
         - Summarize the most important values and relationships.
         - Do not omit any major result contained in the supplied data.
+        - In the Financial Summary Table section, briefly explain the supplied
+        Savings Rate. If it is N/A, state that it could not be calculated
+        because total income was zero.
         - Adjust each section's length according to the amount of relevant activity.
         - Use positive absolute values when discussing expenses.
         - Summarize every month individually.
@@ -2711,9 +2706,6 @@ def generate_financial_insights(financial_insight_data):
         - Do not speculate about why an unrepresented difference exists.
         - Recommendations are optional and must be brief, practical, and directly
         supported by the supplied data.
-        - Do not use a fixed savings percentage.
-        - If the reporting period shows a deficit, prioritize eliminating the deficit
-        before suggesting additional savings.
         - Do not invent transaction categories, causes, trends, amounts, percentages,
         recommendations, or other facts that are not supported by the supplied data.
         - Do not provide extensive financial advice.
@@ -2739,7 +2731,6 @@ def generate_financial_insights(financial_insight_data):
         Return content for:
 
         - Financial Summary Table
-        - Financial Health
         - Monthly Income vs. Expenses
         - Income vs. Expense Transactions
         - Expense Categories
@@ -2787,9 +2778,6 @@ def generate_financial_insights(financial_insight_data):
         "Financial Summary Table": (
             parsed_financial_insights.financial_summary_table
         ),
-        "Financial Health": (
-            parsed_financial_insights.financial_health
-        ),
         "Monthly Income vs. Expenses": (
             parsed_financial_insights.monthly_income_expenses
         ),
@@ -2816,7 +2804,6 @@ def validate_financial_insights(financial_insights):
 
     required_financial_insight_sections = {
         "Financial Summary Table",
-        "Financial Health",
         "Monthly Income vs. Expenses",
         "Income vs. Expense Transactions",
         "Expense Categories",
@@ -2897,251 +2884,6 @@ def validate_financial_insights(financial_insights):
 
     return financial_insights
    
-# ============================================================
-# FINANCIAL HEALTH  FUNCTIONS
-# ============================================================
-def determine_financial_health(total_income, total_expenses):
-
-    # SET the savings-rate thresholds
-    very_healthy_threshold = 20
-    healthy_threshold = 10
-    needs_attention_threshold = 5
-    caution_threshold = 0
-    weak_threshold = -10
-    very_weak_threshold = -25
-    
-
-    # SET the invalid-income error message
-    invalid_total_income_error = "Total income cannot be less than zero."
-
-    # Confirm that the total income is not negative.
-    if total_income < 0:
-        raise ValueError(invalid_total_income_error)
-
-    # Convert total expenses into a positive value for the calculation.
-    normalized_expenses = abs(total_expenses)
-
-    # Handle financial health calculations when there is no income.
-    if total_income == 0:
-
-        # Use no savings rate because it cannot be calculated without income.
-        savings_rate = None
-
-        # Use an undetermined status when there is no income or spending.
-        if normalized_expenses == 0:
-            financial_health = unable_to_determine_status
-
-        # Use the lowest measurable status when spending exists without income.
-        else:
-            financial_health = very_weak_status
-
-        # Return the result without performing the savings-rate calculation.
-        return financial_health, savings_rate
-
-    # Calculate the balance remaining after expenses.
-    calculated_net_balance = total_income - normalized_expenses
-
-    # Calculate the percentage of income remaining after expenses.
-    savings_rate = (
-        calculated_net_balance / total_income
-    ) * 100
-
-    # Assign the Very Healthy status.
-    if savings_rate >= very_healthy_threshold:
-        financial_health = very_healthy_status
-
-    # Assign the Healthy status.
-    elif savings_rate >= healthy_threshold:
-        financial_health = healthy_status
-
-    # Assign the Needs Attention status.
-    elif savings_rate >= needs_attention_threshold:
-        financial_health = needs_attention_status
-
-    # Assign the Caution status.
-    elif savings_rate >= caution_threshold:
-        financial_health = caution_status
-
-    # Assign the Weak status.
-    elif savings_rate >= weak_threshold:
-        financial_health = weak_status
-
-    # Assign the Very Weak status.
-    elif savings_rate >= very_weak_threshold:
-        financial_health = very_weak_status
-
-    # Assign the At Risk status when no threshold is reached.
-    else:
-        financial_health =at_risk_status 
-
-    # Return the financial health status and calculated savings rate.
-    return financial_health, savings_rate
-
-def get_financial_health_colors(financial_health):
-
-    # Map each financial health status to its foreground and background colors.
-    health_color_map = {
-        very_healthy_status: ("#006400", "#E8F5E9"),
-        healthy_status: ("#228B22", "#EEF8EE"),
-        needs_attention_status: ("#6B8E23", "#F4F8E8"),
-        caution_status: ("#B8860B", "#FFF8DC"),
-        weak_status: ("#FFB000", "#FFF4CC"),
-        at_risk_status: ("#FF4500", "#FFF0EB"),
-        very_weak_status: ("#8B0000", "#FDECEC"),
-        unable_to_determine_status: ("#666666", "#F2F2F2")
-}
-    # Define the colors used when the financial health status is not recognized.
-    default_colors = ("#666666", "#F2F2F2")
-
-    # Retrieve the colors for the financial health status.
-    selected_colors = health_color_map.get(financial_health,default_colors)
-
-    # Separate the selected foreground and background colors.
-    (
-        status_forground_color,
-        status_background_color
-    ) = selected_colors
-
-    # Return the foreground and background colors.
-    return status_forground_color, status_background_color
-
-def create_financial_health_summary(financial_health_axis,financial_health,savings_rate):
-    
-   # Define the financial health card's position and dimensions.
-    card_x_position = 0.01
-    card_y_position = 0.45
-    card_width = .98
-    card_height = .8
-
-    # Define the positions of the text displayed inside the card.
-    common_vertical_position = .80
-    title_horizontal_position = .16
-    status_label_horizontal_position = .41
-    savings_label_horizontal_position = .74
-    savings_result_horizontal_position = .75
-
-    # Define the font sizes used for the card text.
-    title_font_size = 13
-    label_font_size = 11
-    result_font_size = 11
-
-    # Define the card border width and corner rounding.
-    card_border_width = 1.5
-    corner_rounding_size = .03
-
-    # Hide the axis lines, labels, and ticks.
-    financial_health_axis.axis("off")
-
-    # Retrieve the foreground and background colors for the health status.
-    (
-    status_foreground_color,
-    status_background_color
-    ) = get_financial_health_colors(financial_health)
-
-    # Display N/A when a savings rate could not be calculated.
-    if savings_rate == None:
-        formatted_saving_rate = "N/A"
-
-    # Format the calculated savings rate as a percentage.
-    else:
-        formatted_saving_rate = f"{savings_rate:.2f}%"
-
-    # Prepare the financial health status and savings-rate text.
-    status_text = financial_health
-    savings_rate_text = formatted_saving_rate
-
-    # Create the rounded financial health summary card.
-    financial_health_card = FancyBboxPatch(
-    (card_x_position, card_y_position),
-    card_width,
-    card_height,
-    transform=financial_health_axis.transAxes,
-    boxstyle=(
-        f"round,pad=0.02,"
-        f"rounding_size={corner_rounding_size}"
-    ),
-    facecolor=status_background_color,
-    edgecolor=status_foreground_color,
-    linewidth=card_border_width,
-    clip_on=False,
-    zorder=0
-    )
-
-    # Add the financial health card to the axis.
-    financial_health_axis.add_patch(financial_health_card)
-
-    # Display the financial health title.
-    financial_health_axis.text(
-        title_horizontal_position,
-        common_vertical_position,
-        "Financial Health",
-        transform=financial_health_axis.transAxes,
-        ha="center",
-        va="center",
-        fontsize=title_font_size,
-        fontweight="bold",
-        color=status_foreground_color,
-        zorder=1
-    )
-
-    # Display the status label.
-    financial_health_axis.text(
-        status_label_horizontal_position,
-        common_vertical_position,
-        "Status:",
-        transform=financial_health_axis.transAxes,
-        ha="right",
-        va="center",
-        fontsize=label_font_size,
-        fontweight="normal",
-        color="black",
-        zorder=1
-    )
-
-    # Display the calculated financial health status.
-    financial_health_axis.text(
-        status_label_horizontal_position,
-        common_vertical_position,
-        status_text,
-        transform=financial_health_axis.transAxes,
-        ha="left",
-        va="center",
-        fontsize=result_font_size,
-        fontweight="bold",
-        color=status_foreground_color,
-        zorder=1
-    )
-
-    # Display the savings-rate label.
-    financial_health_axis.text(
-        savings_label_horizontal_position,
-        common_vertical_position,
-        "Savings Rate:",
-        transform=financial_health_axis.transAxes,
-        ha="right",
-        va="center",
-        fontsize=label_font_size,
-        fontweight="normal",
-        color="black",
-        zorder=1
-    )
-
-    # Display the formatted savings-rate result.
-    financial_health_axis.text(
-        savings_result_horizontal_position,
-        common_vertical_position,
-        savings_rate_text,
-        transform=financial_health_axis.transAxes,
-        ha="left",
-        va="center",
-        fontsize=result_font_size,
-        fontweight="bold",
-        color=status_foreground_color,
-        zorder=1
-    )
-
-    # Finish the function without returning a value.
-    return None
 
 # ============================================================
 # TABLE STYLING FUNCTIONS
@@ -3196,7 +2938,7 @@ def style_financial_table(financial_table):
             data_cell.set_linewidth(0.8)
 
    # Increase the height of the table cells.
-   financial_table.scale(1.0, 2.0)
+   financial_table.scale(1.0, 1.5)
 
    # Finish the function without returning a value.
    return None
@@ -3211,11 +2953,11 @@ def create_monthly_income_expenses_chart(
     expense_totals
 ):
 
-        # Set the width of each bar.
-    bar_width = 0.15
+    # Set the width of each bar.
+    bar_width = 0.20
 
     # Set the amount of space between the income and expense bars.
-    bar_gap = 0.07  
+    bar_gap = 0.23 
     
     # Calculate the central x-axis position for each month.
     x_positions = np.arange(len(months))
@@ -3279,12 +3021,18 @@ def create_monthly_income_expenses_chart(
 
     # Add the income and expense legend below the chart.
     income_axis.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.30),
-        ncol=2,
-        fontsize=9,
-        frameon=False,
-        columnspacing=2
+    loc="upper left",
+    bbox_to_anchor=(
+        0.15,
+        -0.30,
+        0.70,
+        0.10
+    ),
+    mode="expand",
+    ncol=2,
+    fontsize=9,
+    frameon=False,
+    borderaxespad=0
     )
     
     # Return the income and expense bar containers.
@@ -3310,7 +3058,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     for income_bar in income_bars:
         bar_height = income_bar.get_height()
         bar_center = (income_bar.get_x() + income_bar.get_width() / 2)
-        formatted_value = f"${bar_height:,.0f}"
+        formatted_value = f"{bar_height:,.0f}"
         income_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -3325,7 +3073,7 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
     for expense_bar in expense_bars:
         bar_height = expense_bar.get_height()
         bar_center = (expense_bar.get_x() + expense_bar.get_width() / 2)
-        formatted_value = f"${bar_height:,.0f}"
+        formatted_value = f"{bar_height:,.0f}"
         income_axis.text(
             bar_center,
             bar_height + label_offset,
@@ -3341,9 +3089,9 @@ def style_monthly_income_expenses_chart(income_axis, income_bars, expense_bars):
 
     # Create the rounded card surrounding the income and expense chart.
     card = FancyBboxPatch(
-        (-0.15, -0.48),
-        1.22,
-        1.65,
+        (-0.12, -0.45),
+        1.14,
+        1.63,
         transform=income_axis.transAxes,
         boxstyle="round,pad=0.02,rounding_size=0.03",
         facecolor="white",
@@ -3637,8 +3385,8 @@ def create_monthly_income_expense_transaction_chart(
     )
 
     x_positions = np.arange(len(months))
-    bar_width = 0.15
-    bar_gap = 0.07
+    bar_width = 0.20
+    bar_gap = 0.10
 
     income_positions = x_positions - ((bar_width + bar_gap) / 2)
     expense_positions = x_positions + ((bar_width + bar_gap) / 2)
@@ -3701,13 +3449,7 @@ def create_monthly_income_expense_transaction_chart(
         fontweight="bold",
         color="black"
     )
-    transaction_axis.legend(
-        loc="lower center",
-        bbox_to_anchor=(0.1, -0.35),
-        ncol=1,
-        fontsize=11,
-        frameon=False
-    )
+    
 
     return (
         income_transaction_bars,
@@ -3791,9 +3533,9 @@ def style_monthly_income_expense_transaction_chart(
 
     # Create the rounded card surrounding the chart.
     card = FancyBboxPatch(
-        (-0.20, -0.32),
-        1.28,
-        1.55,
+        (-0.14, -0.45),
+        1.16,
+        1.63,
         transform=transaction_axis.transAxes,
         boxstyle=(
             "round,pad=0.02,"
@@ -4121,6 +3863,7 @@ def create_financial_report(
     total_income,
     total_expenses,
     net_balance,
+    savings_rate,
     months,
     income_totals,
     expense_totals,
@@ -4132,15 +3875,9 @@ def create_financial_report(
     financial_insights
 ):
 
-    # Determine the financial health status and savings rate.
-    financial_health, savings_rate = determine_financial_health(
-        total_income,
-        total_expenses
-    )
-
     # Create the financial report figure.
 
-    report_figure = plt.figure(figsize=(18, 23))
+    report_figure = plt.figure(figsize=(18, 10))
 
     # Format the beginning and ending dates for the report.
     formatted_start_date = start_date.strftime("%B %d, %Y")
@@ -4163,7 +3900,7 @@ def create_financial_report(
     # Display the reporting period below the program title.
     report_figure.text(
         0.5,
-        0.94,
+        0.92,
         report_period,
         ha="center",
         fontsize=15
@@ -4171,9 +3908,9 @@ def create_financial_report(
 
     # Create the grid used to organize the report sections.
     report_layout = report_figure.add_gridspec(
+        7,
         6,
-        6,
-        height_ratios=[0.25, 1.20, 0.65, 2.6, 0.60, 6.2]
+        height_ratios=[0.45, 1.85, 0.45, 2.8, 0.35, 0.60, 4.10]
     )
 
     # Create the axis for the financial summary banner.
@@ -4184,11 +3921,6 @@ def create_financial_report(
     # Create the axis for the financial summary table.
     financial_summary = report_figure.add_subplot(
         report_layout[1, :]
-    )
-
-    # Create the axis for the financial health summary.
-    financial_health_axis = report_figure.add_subplot(
-        report_layout[2, :]
     )
 
     # Create the axis for the monthly income and expense chart.
@@ -4208,16 +3940,20 @@ def create_financial_report(
 
     # Create the axis for the AI financial-insights banner.
     financial_insight_banner_axis = report_figure.add_subplot(
-        report_layout[4, :]
+        report_layout[5, :]
     )
 
     # Create the axes for the AI financial-insight columns.
     left_financial_insight_axis = report_figure.add_subplot(
-        report_layout[5, 0:3]
+        report_layout[6, 0:2]
+    )
+
+    center_financial_insight_axis = report_figure.add_subplot(
+        report_layout[6, 2:4]
     )
 
     right_financial_insight_axis = report_figure.add_subplot(
-        report_layout[5, 3:6]
+        report_layout[6, 4:6]
     )
 
     # Set the background color of the AI financial-insights banner.
@@ -4243,20 +3979,24 @@ def create_financial_report(
 
     # Hide the axes used to display the AI summaries.
     left_financial_insight_axis.axis("off")
+    center_financial_insight_axis.axis("off")
     right_financial_insight_axis.axis("off")
 
     # Define the sections displayed in the left column.
     left_financial_insight_sections = [
         "Financial Summary Table",
-        "Financial Health",
         "Monthly Income vs. Expenses",
+    ]
+
+    # Define the sections displayed in the center column.
+    center_financial_insight_sections = [
+        "Subscription Summary",
+        "Expense Categories",
     ]
 
     # Define the sections displayed in the right column.
     right_financial_insight_sections = [
         "Income vs. Expense Transactions",
-        "Expense Categories",
-        "Subscription Summary",
     ]
 
     # Display a column of AI-generated financial insights.
@@ -4333,7 +4073,7 @@ def create_financial_report(
             # Wrap the generated text to fit its column.
             wrapped_lines = textwrap.wrap(
                 normalized_section_text,
-                width=75,
+                width=58,
                 break_long_words=False,
                 break_on_hyphens=False
             )
@@ -4381,18 +4121,7 @@ def create_financial_report(
                 + section_gap
             )
 
-    # Display the left column of AI financial insights.
-    display_financial_insight_column(
-        left_financial_insight_axis,
-        left_financial_insight_sections
-    )
-
-    # Display the right column of AI financial insights.
-    display_financial_insight_column(
-        right_financial_insight_axis,
-        right_financial_insight_sections
-    )
-
+    
     # Hide the financial summary axis lines and tick marks.
     financial_summary.axis("off")
 
@@ -4422,7 +4151,15 @@ def create_financial_report(
         ["Transactions", transaction_count],
         ["Total Income", f"${total_income:,.2f}"],
         ["Total Expenses", f"${total_expenses:,.2f}"],
-        ["Net Balance", f"${net_balance:,.2f}"]
+        ["Net Balance", f"${net_balance:,.2f}"],
+        [
+            "Savings Rate",
+            (
+                "N/A"
+                if savings_rate is None
+                else f"{savings_rate:,.2f}%"
+            )
+        ]
     ]
 
     # Create the financial summary table.
@@ -4435,19 +4172,6 @@ def create_financial_report(
     # Apply the financial table styling.
     style_financial_table(
         financial_table
-    )
-
-    # Increase the financial table's row height.
-    financial_table.scale(
-        1.0,
-        1.40
-    )
-
-    # Create the financial health summary.
-    create_financial_health_summary(
-        financial_health_axis,
-        financial_health,
-        savings_rate
     )
 
     # Create the monthly income and expense chart.
@@ -4496,15 +4220,7 @@ def create_financial_report(
         outgoing_transfer_bars
     )
 
-    # Expand the transaction chart card around its legend.
-    for chart_patch in transaction_axis.patches:
-        if isinstance(chart_patch, FancyBboxPatch):
-            chart_patch.set_bounds(
-                -0.02,
-                -0.48,
-                1.05,
-                1.65
-            )
+   
 
     # Keep the chart title inside the chart card.
     transaction_axis.title.set_position(
@@ -4523,7 +4239,8 @@ def create_financial_report(
         bbox_to_anchor=(0.5, -0.30),
         ncol=3,
         frameon=False,
-        fontsize=8
+        fontsize=8,
+        borderaxespad=0
     )
 
     round_bar_tops(
@@ -4601,7 +4318,7 @@ def create_financial_report(
     # Format each pie slice with its dollar amount and percentage.
     def format_expense_slice(percentage):
 
-        if percentage <= 3:
+        if percentage < 10:
             return ""
 
         # Calculate the dollar amount represented by the current slice.
@@ -4660,32 +4377,61 @@ def create_financial_report(
         wspace=0.70
     )
 
-    # Shift the bar-chart cards right and preserve their separation.
-    income_axis_position = income_axis.get_position()
-    income_axis.set_position(
-        [
-            income_axis_position.x0 + 0.015,
-            income_axis_position.y0 + 0.018,
-            income_axis_position.width - 0.025,
-            income_axis_position.height - 0.018
-        ]
+       # Position the insight columns directly below their banner.
+    financial_insight_banner_position = (
+        financial_insight_banner_axis.get_position()
     )
 
-    transaction_axis_position = transaction_axis.get_position()
-    transaction_axis.set_position(
-        [
-            transaction_axis_position.x0 + 0.010,
-            transaction_axis_position.y0 + 0.018,
-            transaction_axis_position.width - 0.020,
-            transaction_axis_position.height - 0.018
-        ]
+    insight_text_top = (
+        financial_insight_banner_position.y0 - 0.008
     )
 
-    # Display the completed financial report.
+    for financial_insight_axis in (
+        left_financial_insight_axis,
+        center_financial_insight_axis,
+        right_financial_insight_axis,
+    ):
+        insight_axis_position = (
+            financial_insight_axis.get_position()
+        )
+
+        financial_insight_axis.set_position(
+            [
+                insight_axis_position.x0,
+                insight_axis_position.y0,
+                insight_axis_position.width,
+                (
+                    insight_text_top
+                    - insight_axis_position.y0
+                ),
+            ]
+        )
+
+    # Display the AI text only after the final layout
+    # and axis positions have been established.
+    display_financial_insight_column(
+        left_financial_insight_axis,
+        left_financial_insight_sections
+    )
+
+    display_financial_insight_column(
+        center_financial_insight_axis,
+        center_financial_insight_sections
+    )
+
+    display_financial_insight_column(
+        right_financial_insight_axis,
+        right_financial_insight_sections
+    )
+
+    # Complete the final report layout.
+    report_figure.canvas.draw()
+
+    # Display the completed report.
     plt.show()
 
     # Return the completed report figure.
-    return report_figure
+    return report_figure   
 
 # ============================================================
 # REPORT EXPORT FUNCTIONS
@@ -4721,9 +4467,17 @@ def save_financial_report(report_figure):
                 )
 
                 # Save the complete one-page financial report.
+                report_figure.set_size_inches(
+                    18,
+                    10,
+                    forward=False
+                )
+
                 report_figure.savefig(
                     financial_report_file_name,
-                    bbox_inches="tight"
+                    dpi=150,
+                    bbox_inches=None,
+                    facecolor="white"
                 )
 
                 # Confirm that the report was saved.
@@ -4791,6 +4545,7 @@ def main():
             total_income,
             total_expenses,
             net_balance,
+            savings_rate,
             amount_values,
             transaction_types
         ) = financial_summary
@@ -4867,15 +4622,6 @@ def main():
             transaction_categories
         )
 
-        # Determine the financial health status and savings rate.
-        financial_health_summary = determine_financial_health(
-            total_income,
-            total_expenses
-        )
-
-        # Retrieve the financial health values.
-        financial_health, savings_rate = financial_health_summary
-
         # Create the reporting-period data.
         reporting_period = (
             start_date,
@@ -4886,7 +4632,6 @@ def main():
         financial_insight_data = prepare_financial_insight_data(
             financial_summary,
             monthly_summary,
-            financial_health_summary,
             reporting_period,
             expense_category_totals,
             subscription_summary
@@ -4910,6 +4655,7 @@ def main():
             total_income,
             total_expenses,
             net_balance,
+            savings_rate,
             months,
             income_totals,
             expense_totals,
@@ -4932,7 +4678,7 @@ def main():
 
         # Display the original error while developing the project.
         if error.__cause__ is not None:
-            print(f"Technical details: {error.__cause__}")
+            print(f"Technical detail")
 
-if __name__ == "__main__":
+if main == main:
     main()
