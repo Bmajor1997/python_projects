@@ -31,6 +31,7 @@ from matplotlib.patches import FancyBboxPatch
 import tempfile
 from html import escape
 
+import math
 import matplotlib.pyplot as plt
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -2002,11 +2003,15 @@ def create_schedule_c_expense_pie_chart(
             "#4CC9F0",
         ]
 
+        outside_percentage_threshold = 10.0
+        pie_radius = 1.18
+        total_expenses = float(category_totals.sum())
+
         def format_percentage(
             percentage: float,
         ) -> str:
-            """Hide extremely small labels to prevent visual collisions."""
-            if percentage < 2.0:
+            """Display percentages of 10% or more inside their slices."""
+            if percentage < outside_percentage_threshold:
                 return ""
 
             return f"{percentage:.1f}%"
@@ -2017,7 +2022,7 @@ def create_schedule_c_expense_pie_chart(
                 :len(category_totals)
             ],
             startangle=90,
-            radius=1.18,
+            radius=pie_radius,
             autopct=format_percentage,
             pctdistance=0.72,
             wedgeprops={
@@ -2027,13 +2032,129 @@ def create_schedule_c_expense_pie_chart(
             textprops={
                 "fontsize": 9,
                 "fontweight": "bold",
-                "color": "black",
+                "color": "white",
             },
         )
 
         for percentage_label in percentage_labels:
             percentage_label.set_fontsize(9)
             percentage_label.set_fontweight("bold")
+
+        outside_labels = []
+
+        for wedge, category_total in zip(
+            wedges,
+            category_totals.values,
+        ):
+            percentage = (
+                float(category_total) / total_expenses
+            ) * 100
+
+            if percentage >= outside_percentage_threshold:
+                continue
+
+            center_angle = (
+                wedge.theta1 + wedge.theta2
+            ) / 2
+
+            angle_in_radians = math.radians(
+                center_angle
+            )
+
+            line_x_position = (
+                math.cos(angle_in_radians)
+                * pie_radius
+            )
+
+            line_y_position = (
+                math.sin(angle_in_radians)
+                * pie_radius
+            )
+
+            label_side = (
+                1
+                if line_x_position >= 0
+                else -1
+            )
+
+            outside_labels.append(
+                {
+                    "percentage": percentage,
+                    "line_x": line_x_position,
+                    "line_y": line_y_position,
+                    "label_side": label_side,
+                    "label_x": 1.52 * label_side,
+                    "label_y": line_y_position,
+                }
+            )
+
+        minimum_label_spacing = 0.18
+
+        for label_side in (-1, 1):
+            labels_on_side = [
+                label
+                for label in outside_labels
+                if label["label_side"] == label_side
+            ]
+
+            labels_on_side.sort(
+                key=lambda label: label["label_y"]
+            )
+
+            for label_index in range(
+                1,
+                len(labels_on_side),
+            ):
+                previous_label = labels_on_side[
+                    label_index - 1
+                ]
+
+                current_label = labels_on_side[
+                    label_index
+                ]
+
+                minimum_y_position = (
+                    previous_label["label_y"]
+                    + minimum_label_spacing
+                )
+
+                if (
+                    current_label["label_y"]
+                    < minimum_y_position
+                ):
+                    current_label["label_y"] = (
+                        minimum_y_position
+                    )
+
+        for outside_label in outside_labels:
+            horizontal_alignment = (
+                "left"
+                if outside_label["label_side"] == 1
+                else "right"
+            )
+
+            axis.annotate(
+                f'{outside_label["percentage"]:.1f}%',
+                xy=(
+                    outside_label["line_x"],
+                    outside_label["line_y"],
+                ),
+                xytext=(
+                    outside_label["label_x"],
+                    outside_label["label_y"],
+                ),
+                ha=horizontal_alignment,
+                va="center",
+                fontsize=9,
+                fontweight="bold",
+                color="black",
+                arrowprops={
+                    "arrowstyle": "-",
+                    "color": "#666666",
+                    "linewidth": 1,
+                    "connectionstyle": "angle3",
+                },
+            )
 
         axis.legend(
             wedges,
