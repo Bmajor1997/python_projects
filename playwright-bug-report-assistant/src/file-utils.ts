@@ -21,3 +21,10 @@ export function make_filename(report_data: BugReportData): string {
     return `${safe_filename}.md`;
 }
 
+// Writes the completed Markdown report to its destination file.
+export async function save_file(
+  file_path: string,
+  markdown: string
+): Promise<void> {
+  await writeFile(file_path, markdown, "utf8");
+}
