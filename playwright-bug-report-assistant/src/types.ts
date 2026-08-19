@@ -47,7 +47,7 @@ export type HumanReview = {
 export type BugReportData = {
     details: FailureDetails;
     evidence: EvidenceFiles;
-    enviroment: EnvironmentDetails;
+    environment: EnvironmentDetails;
     humanReview: HumanReview;
     generatedAt: Date;
     automatedWarning: string;

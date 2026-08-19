@@ -69,7 +69,7 @@ export function collect_failure_details(
         retryNumber: result.retry,
         testSteps: test_steps,
         };
-
+      }
     // Finds the screenshots, traces, videos, and other attachments available for a failed test.
 export function find_evidence(result: TestResult): EvidenceFiles {
     const screenshot_paths: string[] = [];
@@ -109,14 +109,87 @@ export function find_evidence(result: TestResult): EvidenceFiles {
   other_attachments.push(attachment.path);
 
   return {
-  screenshotPaths: screenshot_paths,
-  tracePaths: trace_paths,
-  videoPaths: video_paths,
-  otherAttachments: other_attachments,
-};
+    screenshotPaths: screenshot_paths,
+    tracePaths: trace_paths,
+    videoPaths: video_paths,
+    otherAttachments: other_attachments,
+  };
+  }
+}
+  
 // Collects the available operating system, browser, project, and execution details.
 export function collect_environment(
   failure: FailedTest
 ): EnvironmentDetails {
+  const { test, result } = failure;
+  const raw_operating_system = platform();
+  const system_release = release();
+
+  let operating_system: string;
+
+  if (raw_operating_system === "win32") {
+    operating_system = "Windows";
+  } else if (raw_operating_system === "darwin") {
+    operating_system = "macOS";
+  } else if (raw_operating_system === "linux") {
+    operating_system = "Linux";
+  } else {
+    operating_system = raw_operating_system;
+  }
+
+  const project = test.parent.project();
+  let project_name: string;
+
+  if (project?.name) {
+    project_name = project.name;
+  } else {
+    project_name = "Unknown";
+  }
+
+  const browser = project?.use.browserName;
+  let browser_name: string;
+
+  if (browser) {
+    browser_name = browser;
+  } else {
+    browser_name = "Unknown";
+  }
+
+  const execution_time = result.startTime;
+
+  return {
+    operatingSystem: operating_system,
+    systemRelease: system_release,
+    projectName: project_name,
+    browserName: browser_name,
+    executionTime: execution_time,
+  };
 }
-   }
+
+const automated_warning =  "This report was generated automatically and requires human review.";
+  
+export function build_report_data(
+  details:FailureDetails,
+  evidence: EvidenceFiles,
+  environment: EnvironmentDetails,
+   
+): BugReportData {
+    const human_review: HumanReview = {
+      confirmedDefect: null,
+      severity: null,
+      priority: null,
+      finalTitle: null,
+      notes: null,
+      ticketUrl: null,
+};
+    const generated_at = new Date();
+
+    return {
+      details,
+      evidence,
+      environment,
+      humanReview: human_review,
+      generatedAt: generated_at,
+      automatedWarning: automated_warning,
+    };
+}
