@@ -192,4 +192,113 @@ export function build_report_data(
       generatedAt: generated_at,
       automatedWarning: automated_warning,
     };
-}
+
+  }
+export function format_markdown(
+  report_data:BugReportData
+): string{
+    
+  const  {
+        details,
+        evidence,
+        environment,
+        humanReview: human_review,
+        generatedAt: generated_at,
+        automatedWarning: automated_warning,
+      } = report_data;
+  
+      const duration_seconds = (durationMS / 100).toFixed(2);
+      const formatted_date = date_value.toISOString();
+      const formatted_start_time = details.startTime.toISOString();
+
+      const formatted_execution_time =
+        environment.executionTime.toISOString();
+
+      const formatted_generated_at = generated_at.toISOString();
+      const markdown_lines: string[]= [];
+
+      markdown_lines.push(
+        `# Bug Report: ${escape_markdown(details.testTitle)}`
+      );
+
+      markdown_lines.push("");
+
+      markdown_lines.push(
+        `> ${escape_markdown(automated_warning)}`
+      );
+
+      markdown_lines.push("");
+      }
+
+      markdown_lines.push("## Test Summary");
+      markdown_lines.push("");
+
+      markdown_lines.push("| Field | Value |");
+      markdown_lines.push("| --- | --- |");
+
+      markdown_lines.push(
+        `| Test Title | ${escape_markdown(details.testTitle)} |`
+      );
+
+      markdown_lines.push(
+        `| Status | ${escape_markdown(details.status)} |`
+      );
+
+      markdown_lines.push(
+        `| Location | ${escape_markdown(test_location)} |`
+      );
+
+      markdown_lines.push(
+        `| Start Time | ${escape_markdown(formatted_start_time)} |`
+      );
+
+      markdown_lines.push(
+        `| Duration | ${escape_markdown(duration_seconds)} seconds |`
+      );
+
+      markdown_lines.push(
+        `| Retry Number | ${details.retryNumber} |`
+      );
+
+      markdown_lines.push("");
+
+      markdown_lines.push("## Failure Details");
+      markdown_lines.push("");
+
+      markdown_lines.push("```text");
+      markdown_lines.push(details.errorMessage);
+      markdown_lines.push("```");
+
+      markdown_lines.push("");
+
+      markdown_lines.push("## Stack Trace");
+      markdown_lines.push("");
+      markdown_lines.push("```text");
+
+      if (details.stackTrace) {
+        markdown_lines.push(details.stackTrace);
+      } else {
+        markdown_lines.push("Not available");
+      }
+
+      markdown_lines.push("```");
+      markdown_lines.push("");
+
+      markdown_lines.push("## Test Steps");
+      markdown_lines.push("");
+
+      if (details.testSteps.length === 0) {
+        markdown_lines.push("No test steps recorded");
+      } else {
+        let step_number = 1;
+
+        for (const step of details.testSteps) {
+          markdown_lines.push(
+            `${step_number}. ${escape_markdown(step)}`
+          );
+
+          step_number++;
+        }
+      }
+
+      markdown_lines.push("");
