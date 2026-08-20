@@ -1,7 +1,7 @@
 """Personal financial analyzer for bank and credit-card Excel exports.
 
 Generates categorized transactions, multi-factor financial-health analysis,
-AI-written insights, an Excel workbook, and a chart-enabled PDF report.
+AI-written insights, and a chart-enabled PDF report.
 Educational analysis only; not professional financial or legal advice.
 """
 
@@ -23,9 +23,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.ticker import PercentFormatter
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, Field, model_validator
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -72,9 +69,6 @@ minimum_recurring_occurrences = 3
 recurring_amount_tolerance = 0.10
 low_confidence_threshold = 0.70
 spike_ratio = 1.80
-currency_format = '$#,##0.00;[Red]-$#,##0.00'
-percent_format = '0.0%'
-date_format = 'yyyy-mm-dd'
 
 
 class PersonalFinanceCategory(str, Enum):
@@ -314,14 +308,11 @@ def select_excel_files() -> list[str]:
     return list(paths)
 
 
-def select_output_directory() -> Optional[str]:
-    import tkinter as tk
-    from tkinter import filedialog
-
-    root = tk.Tk(); root.withdraw()
-    path = filedialog.askdirectory(title="Choose Personal Financial Report Folder")
-    root.destroy()
-    return path or None
+def get_downloads_directory() -> Path:
+    """Return the user's Downloads folder, creating it when necessary."""
+    downloads_directory = Path.home() / "Downloads"
+    downloads_directory.mkdir(parents=True, exist_ok=True)
+    return downloads_directory
 
 
 def _find_column(dataframe: pd.DataFrame, candidates: Iterable[str], required: bool = True) -> Optional[object]:
@@ -691,54 +682,6 @@ def generate_personal_financial_insights(payload: dict[str, object], client: Opt
         print(f"[WARNING] AI insight generation failed: {error}"); return fallback
 
 
-def _write_dataframe(workbook: Workbook, title: str, dataframe: pd.DataFrame, currency_columns: Iterable[str] = (), percent_columns: Iterable[str] = (), date_columns: Iterable[str] = ()) -> None:
-    sheet = workbook.create_sheet(title=title); header_fill = PatternFill("solid", fgColor="1F4E78"); header_font = Font(color="FFFFFF", bold=True)
-    for column_index, column_name in enumerate(dataframe.columns, 1):
-        cell = sheet.cell(1, column_index, column_name); cell.fill = header_fill; cell.font = header_font; cell.alignment = Alignment(horizontal="center")
-    for row_index, row in enumerate(dataframe.itertuples(index=False, name=None), 2):
-        for column_index, value in enumerate(row, 1):
-            sheet.cell(row_index, column_index, None if pd.isna(value) else value).alignment = Alignment(vertical="top")
-    columns = {name: index + 1 for index, name in enumerate(dataframe.columns)}
-    for names, number_format in ((currency_columns, currency_format), (percent_columns, percent_format), (date_columns, date_format)):
-        for name in names:
-            if name in columns:
-                for row in range(2, sheet.max_row + 1):
-                    sheet.cell(row, columns[name]).number_format = number_format
-    sheet.freeze_panes = "A2"; sheet.auto_filter.ref = sheet.dimensions
-    for column_index, column_name in enumerate(dataframe.columns, 1):
-        width = max([len(str(column_name))] + [min(60, len(str(sheet.cell(row, column_index).value or ""))) for row in range(2, min(sheet.max_row, 300) + 1)])
-        sheet.column_dimensions[get_column_letter(column_index)].width = min(width + 2, 48)
-
-
-def export_personal_finance_workbook(path: str, dataframe: pd.DataFrame, metrics: PersonalFinanceMetrics, health: FinancialHealthResult, monthly: pd.DataFrame, categories: pd.DataFrame, recurring: pd.DataFrame, subscriptions: pd.DataFrame, anomalies: pd.DataFrame, insights: PersonalFinancialInsightResponse) -> None:
-    workbook = Workbook(); summary = workbook.active; summary.title = "Executive Summary"; summary["A1"] = app_title; summary["A1"].font = Font(size=18, bold=True, color="FFFFFF"); summary["A1"].fill = PatternFill("solid", fgColor="1F4E78"); summary.merge_cells("A1:D1")
-    rows = [("Reporting Period", f"{dataframe['Date'].min():%Y-%m-%d} to {dataframe['Date'].max():%Y-%m-%d}"), ("Total Income", metrics.total_income), ("Total Spending", metrics.total_spending), ("Debt Payments", metrics.debt_payments), ("Net Cash Flow", metrics.net_cash_flow), ("Savings Rate", metrics.savings_rate), ("Financial Health", health.status), ("Health Score", health.score)]
-    for row_number, (label, value) in enumerate(rows, 3):
-        summary.cell(row_number, 1, label).font = Font(bold=True); summary.cell(row_number, 2, value)
-        if any(word in label for word in ("Income", "Spending", "Payments", "Cash")): summary.cell(row_number, 2).number_format = currency_format
-        if "Rate" in label and value is not None: summary.cell(row_number, 2).number_format = percent_format
-    current_row = 13
-    for name, body in insights.model_dump().items():
-        summary.cell(current_row, 1, name.replace("_", " ").title()).font = Font(bold=True, color="1F4E78"); summary.cell(current_row + 1, 1, body); summary.merge_cells(start_row=current_row + 1, start_column=1, end_row=current_row + 2, end_column=4); summary.cell(current_row + 1, 1).alignment = Alignment(wrap_text=True, vertical="top"); current_row += 4
-    transaction_columns = ["Transaction ID", "Date", "Description", "Amount", "Account Type", "Account Name", "Cash Flow Type", "Category", "Subcategory", "Spending Nature", "Expense Variability", "Merchant Key", "Classification Confidence", "Review Required", "Classification Source", "Classification Rationale", "Duplicate Status", "Matched Transaction ID", "Included", "Source File"]
-    monthly_categories = build_monthly_category_summary(dataframe)
-    spending_nature = build_spending_nature_summary(dataframe)
-    expense_variability = build_expense_variability_summary(dataframe)
-    merchants = build_merchant_summary(dataframe)
-    _write_dataframe(workbook, "Transactions", dataframe[transaction_columns], ("Amount",), ("Classification Confidence",), ("Date",))
-    _write_dataframe(workbook, "Monthly Summary", monthly, ("Income", "Spending", "Refunds", "Debt Payments", "Savings Contributions", "Investment Contributions", "Net Spending", "Net Cash Flow"), ("Savings Rate",))
-    _write_dataframe(workbook, "Category Summary", categories, ("Spending",), ("Share of Spending",))
-    _write_dataframe(workbook, "Monthly Categories", monthly_categories, ("Spending",))
-    _write_dataframe(workbook, "Essential vs Discretionary", spending_nature, ("Spending",), ("Share of Spending",))
-    _write_dataframe(workbook, "Fixed vs Variable", expense_variability, ("Outflow",), ("Share of Outflow",))
-    _write_dataframe(workbook, "Top Merchants", merchants, ("Spending",), date_columns=("First Seen", "Last Seen"))
-    _write_dataframe(workbook, "Recurring Expenses", recurring, ("Average Amount",), ("Amount Variation",), ("First Seen", "Last Seen"))
-    _write_dataframe(workbook, "Subscriptions", subscriptions, ("Observed Spend",))
-    _write_dataframe(workbook, "Unusual Transactions", anomalies, ("Amount", "Baseline"), ("Change %",), ("Date",))
-    review = dataframe[dataframe["Review Required"] | dataframe["Duplicate Status"].ne("Unique")]; _write_dataframe(workbook, "Classification Review", review[transaction_columns], ("Amount",), ("Classification Confidence",), ("Date",))
-    notes = pd.DataFrame([{"Topic": "Purpose", "Note": "Educational personal-finance analysis only."}, {"Topic": "Limitations", "Note": "Review uncertain classifications, duplicates, transfers, refunds, reimbursements, and card-payment matches."}, {"Topic": "Advice", "Note": "Not financial, tax, investment, legal, credit, or accounting advice."}]); _write_dataframe(workbook, "Personal Notes", notes); workbook.save(path)
-
-
 def _save_chart(figure: plt.Figure, path: Path) -> None:
     figure.tight_layout(pad=2.0); figure.savefig(path, dpi=180, bbox_inches="tight", facecolor="white"); plt.close(figure)
 
@@ -776,8 +719,8 @@ def export_pdf_report(path: str, dataframe: pd.DataFrame, metrics: PersonalFinan
         story.extend([PageBreak(), Paragraph("Educational Disclaimer", styles["Section"]), Paragraph("Based only on supplied transaction records and automated classifications. Review uncertain items. Not financial, tax, investment, legal, credit, or accounting advice.", styles["BodyCustom"])]); document.build(story)
 
 
-def print_console_summary(metrics: PersonalFinanceMetrics, health: FinancialHealthResult, pdf_path: str, workbook_path: str) -> None:
-    print("\n" + "=" * 72); print("PERSONAL FINANCIAL ANALYSIS COMPLETE"); print("=" * 72); print(f"Income:              ${metrics.total_income:,.2f}"); print(f"Spending:            ${metrics.total_spending:,.2f}"); print(f"Debt payments:       ${metrics.debt_payments:,.2f}"); print(f"Net cash flow:       ${metrics.net_cash_flow:,.2f}"); print(f"Savings rate:        {'N/A' if metrics.savings_rate is None else f'{metrics.savings_rate:.1%}'}"); print(f"Financial health:    {health.status}"); print(f"PDF report:          {pdf_path}"); print(f"Excel workbook:      {workbook_path}"); print("=" * 72)
+def print_console_summary(metrics: PersonalFinanceMetrics, health: FinancialHealthResult, pdf_path: str) -> None:
+    print("\n" + "=" * 72); print("PERSONAL FINANCIAL ANALYSIS COMPLETE"); print("=" * 72); print(f"Income:              ${metrics.total_income:,.2f}"); print(f"Spending:            ${metrics.total_spending:,.2f}"); print(f"Debt payments:       ${metrics.debt_payments:,.2f}"); print(f"Net cash flow:       ${metrics.net_cash_flow:,.2f}"); print(f"Savings rate:        {'N/A' if metrics.savings_rate is None else f'{metrics.savings_rate:.1%}'}"); print(f"Financial health:    {health.status}"); print(f"PDF report:          {pdf_path}"); print("=" * 72)
 
 
 def main() -> None:
@@ -789,10 +732,8 @@ def main() -> None:
         print("No files selected."); return
     progress = TerminalProgress()
     try:
-        progress.set(5, "Reading statements", f"{len(selected_files)} file(s)"); transactions = read_and_combine_statements(selected_files); client = create_openai_client(); progress.set(15, "Classifying transactions", f"{len(transactions):,} rows"); analyzed = enrich_transactions(transactions, client, lambda fraction, status: progress.set(15 + fraction * 35, "Classifying transactions", status)); recurring = identify_recurring_transactions(analyzed); analyzed = apply_expense_variability(analyzed, recurring); subscriptions = build_subscription_audit(recurring); anomalies = detect_anomalies(analyzed); monthly = build_monthly_summary(analyzed); categories = build_category_summary(analyzed); metrics = calculate_metrics(analyzed, monthly); health = calculate_financial_health(metrics, monthly); progress.set(72, "Generating insights", health.status); payload = build_insights_payload(analyzed, metrics, health, monthly, categories, recurring, subscriptions, anomalies); insights = generate_personal_financial_insights(payload, client); output_directory = select_output_directory()
-        if not output_directory:
-            progress.close(); print("No output folder selected."); return
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S"); pdf_path = str(Path(output_directory) / f"personal_financial_report_{timestamp}.pdf"); workbook_path = str(Path(output_directory) / f"personal_financial_analysis_{timestamp}.xlsx"); progress.set(88, "Building Excel workbook"); export_personal_finance_workbook(workbook_path, analyzed, metrics, health, monthly, categories, recurring, subscriptions, anomalies, insights); progress.set(94, "Building PDF report"); export_pdf_report(pdf_path, analyzed, metrics, health, monthly, categories, recurring, subscriptions, anomalies, insights); progress.set(100, "Complete"); progress.close(); print_console_summary(metrics, health, pdf_path, workbook_path); root = tk.Tk(); root.withdraw(); messagebox.showinfo(app_title, f"Analysis complete.\n\nPDF: {pdf_path}\nExcel: {workbook_path}"); root.destroy()
+        progress.set(5, "Reading statements", f"{len(selected_files)} file(s)"); transactions = read_and_combine_statements(selected_files); client = create_openai_client(); progress.set(15, "Classifying transactions", f"{len(transactions):,} rows"); analyzed = enrich_transactions(transactions, client, lambda fraction, status: progress.set(15 + fraction * 35, "Classifying transactions", status)); recurring = identify_recurring_transactions(analyzed); analyzed = apply_expense_variability(analyzed, recurring); subscriptions = build_subscription_audit(recurring); anomalies = detect_anomalies(analyzed); monthly = build_monthly_summary(analyzed); categories = build_category_summary(analyzed); metrics = calculate_metrics(analyzed, monthly); health = calculate_financial_health(metrics, monthly); progress.set(72, "Generating insights", health.status); payload = build_insights_payload(analyzed, metrics, health, monthly, categories, recurring, subscriptions, anomalies); insights = generate_personal_financial_insights(payload, client); output_directory = get_downloads_directory()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S"); pdf_path = str(Path(output_directory) / f"personal_financial_report_{timestamp}.pdf"); progress.set(88, "Building PDF report"); export_pdf_report(pdf_path, analyzed, metrics, health, monthly, categories, recurring, subscriptions, anomalies, insights); progress.set(100, "Complete"); progress.close(); print_console_summary(metrics, health, pdf_path); root = tk.Tk(); root.withdraw(); messagebox.showinfo(app_title, f"Analysis complete.\n\nPDF: {pdf_path}"); root.destroy()
     except Exception as error:
         progress.close(); print(f"[ERROR] Analysis failed: {error}"); root = tk.Tk(); root.withdraw(); messagebox.showerror(app_title, f"Analysis failed:\n{error}"); root.destroy()
 
