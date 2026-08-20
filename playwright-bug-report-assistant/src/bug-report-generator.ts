@@ -8,6 +8,7 @@ import {
   escape_markdown,
   log_error
 } from "./text-utils";
+
 import type {
   BugReportData,
   EnvironmentDetails,
@@ -195,110 +196,376 @@ export function build_report_data(
 
   }
 export function format_markdown(
-  report_data:BugReportData
-): string{
+  report_data: BugReportData
+): string {
+  const {
+    details,
+    evidence,
+    environment,
+    humanReview: human_review,
+    generatedAt: generated_at,
+    automatedWarning: automated_warning,
+  } = report_data;
+
+  const duration_seconds =
+    (details.durationMs / 1000).toFixed(2);
+
+  const test_location =
+    `${details.testFile}:${details.lineNumber}:${details.columnNumber}`;
+
+  const formatted_start_time =
+    details.startTime.toISOString();
+
+  const formatted_execution_time =
+    environment.executionTime.toISOString();
+
+  const formatted_generated_at =
+    generated_at.toISOString();
+
+  const markdown_lines: string[] = [];
+
+  markdown_lines.push(
+    `# Bug Report: ${escape_markdown(details.testTitle)}`
+  );
+
+  markdown_lines.push("");
+
+  markdown_lines.push(
+    `> ${escape_markdown(automated_warning)}`
+  );
+
+  markdown_lines.push("");
+  markdown_lines.push("## Test Summary");
+  markdown_lines.push("");
+  markdown_lines.push("| Field | Value |");
+  markdown_lines.push("| --- | --- |");
+
+  markdown_lines.push(
+    `| Test Title | ${escape_markdown(details.testTitle)} |`
+  );
+
+  markdown_lines.push(
+    `| Status | ${escape_markdown(details.status)} |`
+  );
+
+  markdown_lines.push(
+    `| Location | ${escape_markdown(test_location)} |`
+  );
+
+  markdown_lines.push(
+    `| Start Time | ${escape_markdown(formatted_start_time)} |`
+  );
+
+  markdown_lines.push(
+    `| Duration | ${escape_markdown(duration_seconds)} seconds |`
+  );
+
+  markdown_lines.push(
+    `| Retry Number | ${details.retryNumber} |`
+  );
+
+  markdown_lines.push("");
+  markdown_lines.push("## Failure Details");
+  markdown_lines.push("");
+  markdown_lines.push("```text");
+  markdown_lines.push(details.errorMessage);
+  markdown_lines.push("```");
+
+  markdown_lines.push("");
+  markdown_lines.push("## Stack Trace");
+  markdown_lines.push("");
+  markdown_lines.push("```text");
+
+  if (details.stackTrace) {
+    markdown_lines.push(details.stackTrace);
+  } else {
+    markdown_lines.push("Not available");
+  }
+
+  markdown_lines.push("```");
+
+  markdown_lines.push("");
+  markdown_lines.push("## Test Steps");
+  markdown_lines.push("");
+
+  if (details.testSteps.length === 0) {
+    markdown_lines.push("No test steps recorded");
+  } else {
+    let step_number = 1;
+
+    for (const step of details.testSteps) {
+      markdown_lines.push(
+        `${step_number}. ${escape_markdown(step)}`
+      );
+
+      step_number++;
+    }
+  }
+
+  markdown_lines.push("");
+  markdown_lines.push("## Environment");
+  markdown_lines.push("");
+  markdown_lines.push("| Field | Value |");
+  markdown_lines.push("| --- | --- |");
+
+  markdown_lines.push(
+    `| Operating System | ${escape_markdown(environment.operatingSystem)} |`
+  );
+
+  markdown_lines.push(
+    `| System Release | ${escape_markdown(environment.systemRelease)} |`
+  );
+
+  markdown_lines.push(
+    `| Project Name | ${escape_markdown(environment.projectName)} |`
+  );
+
+  markdown_lines.push(
+    `| Browser Name | ${escape_markdown(environment.browserName)} |`
+  );
+
+  markdown_lines.push(
+    `| Execution Time | ${escape_markdown(formatted_execution_time)} |`
+  );
+
+  markdown_lines.push(
+    `| Report Generated At | ${escape_markdown(formatted_generated_at)} |`
+  );
+
+  markdown_lines.push("");
+  markdown_lines.push("## Evidence");
+  markdown_lines.push("");
+
+  markdown_lines.push("### Screenshots");
+  markdown_lines.push("");
+
+  if (evidence.screenshotPaths.length === 0) {
+    markdown_lines.push("No screenshots captured");
+  } else {
+    for (const screenshot_path of evidence.screenshotPaths) {
+      markdown_lines.push(
+        `- \`${escape_markdown(screenshot_path)}\``
+      );
+    }
+  }
+
+  markdown_lines.push("");
+  markdown_lines.push("### Traces");
+  markdown_lines.push("");
+
+  if (evidence.tracePaths.length === 0) {
+    markdown_lines.push("No trace captured");
+  } else {
+    for (const trace_path of evidence.tracePaths) {
+      markdown_lines.push(
+        `- \`${escape_markdown(trace_path)}\``
+      );
+    }
+  }
+
+  markdown_lines.push("");
+  markdown_lines.push("### Videos");
+  markdown_lines.push("");
+
+  if (evidence.videoPaths.length === 0) {
+    markdown_lines.push("No videos captured");
+  } else {
+    for (const video_path of evidence.videoPaths) {
+      markdown_lines.push(
+        `- \`${escape_markdown(video_path)}\``
+      );
+    }
+  }
+
+  markdown_lines.push("");
+  markdown_lines.push("### Other Attachments");
+  markdown_lines.push("");
+
+  if (evidence.otherAttachments.length === 0) {
+    markdown_lines.push("No other attachments captured");
+  } else {
+    for (
+      const other_attachment
+      of evidence.otherAttachments
+    ) {
+      markdown_lines.push(
+        `- \`${escape_markdown(other_attachment)}\``
+      );
+    }
+  }
+
+  markdown_lines.push("");
+  markdown_lines.push("## Human Review");
+  markdown_lines.push("");
+  markdown_lines.push("| Field | Value |");
+  markdown_lines.push("| --- | --- |");
+
+  let confirmed_defect_value: string;
+
+  if (human_review.confirmedDefect === true) {
+    confirmed_defect_value = "Yes";
+  } else if (human_review.confirmedDefect === false) {
+    confirmed_defect_value = "No";
+  } else {
+    confirmed_defect_value = "Pending";
+  }
+
+  markdown_lines.push(
+    `| Confirmed Defect | ${confirmed_defect_value} |`
+  );
+
+  let severity_value: string;
+
+  if (human_review.severity) {
+    severity_value = human_review.severity;
+  } else {
+    severity_value = "Pending review";
+  }
+
+  markdown_lines.push(
+    `| Severity | ${escape_markdown(severity_value)} |`
+  );
+
+  let priority_value: string;
+
+  if (human_review.priority) {
+    priority_value = human_review.priority;
+  } else {
+    priority_value = "Pending review";
+  }
+
+  markdown_lines.push(
+    `| Priority | ${escape_markdown(priority_value)} |`
+  );
+
+  let final_title_value: string;
+
+  if (human_review.finalTitle) {
+    final_title_value = human_review.finalTitle;
+  } else {
+    final_title_value = "Pending review";
+  }
+
+  markdown_lines.push(
+    `| Final Title | ${escape_markdown(final_title_value)} |`
+  );
+
+  let notes_value: string;
+
+  if (human_review.notes) {
+    notes_value = human_review.notes;
+  } else {
+    notes_value = "Pending";
+  }
+
+  markdown_lines.push(
+    `| Notes | ${escape_markdown(notes_value)} |`
+  );
+
+  let ticket_url_value: string;
+
+  if (human_review.ticketUrl) {
+    ticket_url_value = human_review.ticketUrl;
+  } else {
+    ticket_url_value = "Pending";
+  }
+
+  markdown_lines.push(
+    `| Ticket URL | ${escape_markdown(ticket_url_value)} |`
+  );
+
+  return markdown_lines.join("\n");
+}
+
+export function format_json(
+  report_data: BugReportData
+): string {
+    const formatted_json =
+      JSON.stringify(report_data, null, 2);
+
+      return formatted_json;
+}
+
+export function format_plain_text(
+  report_data: BugReportData
+): string {
+  const {
+    details,
+    evidence,
+    environment,
+    humanReview: human_review,
+    generatedAt: generated_at,
+    automatedWarning: automated_warning,
+  } = report_data;
+
+    const duration_seconds =
+      (details.durationMs / 1000).toFixed(2);
+
+    const test_location =
+      `${details.testFile}:${details.lineNumber}:${details.columnNumber}`;
+
+    const formatted_start_time =
+      details.startTime.toISOString(); 
+
+    const formatted_execution_time =
+      environment.executionTime.toISOString();
+
+    const formatted_generated_at =
+      generated_at.toISOString(); 
+
+    const text_lines: string[] =[]
     
-  const  {
-        details,
-        evidence,
-        environment,
-        humanReview: human_review,
-        generatedAt: generated_at,
-        automatedWarning: automated_warning,
-      } = report_data;
+    text_lines.push(`BUG REPORT: ${details.testTitle}`);
+
+    text_lines.push("")
+    
+    text_lines.push(automated_warning)
+
+    text_lines.push("")
+
+    text_lines.push("TEST SUMMARY")
+
+    text_lines.push("---------------")
+
+    text_lines.push(`Test Title: ${details.testTitle}`);
+
+  text_lines.push(`Status: ${details.status}`);
+
+  text_lines.push(`Location: ${test_location}`);
+
+  text_lines.push(`Start Time: ${formatted_start_time}`);
+
+  text_lines.push(`Duration: ${duration_seconds} seconds`);
+
+  text_lines.push(`Retry Number: ${details.retryNumber}`);
+
+  text_lines.push("");
+
+  text_lines.push("FAILURE DETAILS");
+  text_lines.push("--------------------");
+  text_lines.push(details.errorMessage);
+  text_lines.push("");
+
+  text_lines.push("STACK TRACE");
+  text_lines.push("--------------------");
+
+  if (details.stackTrace) {
+    text_lines.push(details.stackTrace);
+  }else{
+    text_lines.push("Not available");
+  }
   
-      const duration_seconds = (durationMS / 100).toFixed(2);
-      const formatted_date = date_value.toISOString();
-      const formatted_start_time = details.startTime.toISOString();
+  if (details.testSteps.length === 0)
+      text_lines.push("No test steps recorded")
+  else{
+    
+    let step_number = 1
 
-      const formatted_execution_time =
-        environment.executionTime.toISOString();
-
-      const formatted_generated_at = generated_at.toISOString();
-      const markdown_lines: string[]= [];
-
-      markdown_lines.push(
-        `# Bug Report: ${escape_markdown(details.testTitle)}`
-      );
-
-      markdown_lines.push("");
-
-      markdown_lines.push(
-        `> ${escape_markdown(automated_warning)}`
-      );
-
-      markdown_lines.push("");
-      }
-
-      markdown_lines.push("## Test Summary");
-      markdown_lines.push("");
-
-      markdown_lines.push("| Field | Value |");
-      markdown_lines.push("| --- | --- |");
-
-      markdown_lines.push(
-        `| Test Title | ${escape_markdown(details.testTitle)} |`
-      );
-
-      markdown_lines.push(
-        `| Status | ${escape_markdown(details.status)} |`
-      );
-
-      markdown_lines.push(
-        `| Location | ${escape_markdown(test_location)} |`
-      );
-
-      markdown_lines.push(
-        `| Start Time | ${escape_markdown(formatted_start_time)} |`
-      );
-
-      markdown_lines.push(
-        `| Duration | ${escape_markdown(duration_seconds)} seconds |`
-      );
-
-      markdown_lines.push(
-        `| Retry Number | ${details.retryNumber} |`
-      );
-
-      markdown_lines.push("");
-
-      markdown_lines.push("## Failure Details");
-      markdown_lines.push("");
-
-      markdown_lines.push("```text");
-      markdown_lines.push(details.errorMessage);
-      markdown_lines.push("```");
-
-      markdown_lines.push("");
-
-      markdown_lines.push("## Stack Trace");
-      markdown_lines.push("");
-      markdown_lines.push("```text");
-
-      if (details.stackTrace) {
-        markdown_lines.push(details.stackTrace);
-      } else {
-        markdown_lines.push("Not available");
-      }
-
-      markdown_lines.push("```");
-      markdown_lines.push("");
-
-      markdown_lines.push("## Test Steps");
-      markdown_lines.push("");
-
-      if (details.testSteps.length === 0) {
-        markdown_lines.push("No test steps recorded");
-      } else {
-        let step_number = 1;
-
-        for (const step of details.testSteps) {
-          markdown_lines.push(
-            `${step_number}. ${escape_markdown(step)}`
-          );
-
-          step_number++;
-        }
-      }
-
-      markdown_lines.push("");
+    for ( const step of details.testSteps){
+      text_lines.push(
+        `${step_number}. ${step}`
+    );
+      step_number++;
+  }
+  text_lines.push("");
+}
