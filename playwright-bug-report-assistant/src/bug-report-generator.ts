@@ -71,43 +71,52 @@ export function collect_failure_details(
         testSteps: test_steps,
         };
       }
-    // Finds the screenshots, traces, videos, and other attachments available for a failed test.
-export function find_evidence(result: TestResult): EvidenceFiles {
-    const screenshot_paths: string[] = [];
-    const trace_paths: string[] = [];
-    const video_paths: string[] = [];
-    const other_attachments: string[] = [];
+    
+export function find_evidence(
+  result: TestResult
+): EvidenceFiles {
+  const screenshot_paths: string[] = [];
+  const trace_paths: string[] = [];
+  const video_paths: string[] = [];
+  const other_attachments: string[] = [];
 
-   for (const attachment of result.attachments) {
-  if (!attachment.path || !existsSync(attachment.path)) {
-    continue;
+  for (const attachment of result.attachments) {
+    if (
+      !attachment.path ||
+      !existsSync(attachment.path)
+    ) {
+      continue;
+    }
+
+    const attachment_name =
+      attachment.name.toLowerCase();
+
+    const content_type =
+      attachment.contentType.toLowerCase();
+
+    if (
+      content_type.startsWith("image/") ||
+      attachment_name.includes("screenshot")
+    ) {
+      screenshot_paths.push(attachment.path);
+      continue;
+    }
+
+    if (attachment_name.includes("trace")) {
+      trace_paths.push(attachment.path);
+      continue;
+    }
+
+    if (
+      content_type.startsWith("video/") ||
+      attachment_name.includes("video")
+    ) {
+      video_paths.push(attachment.path);
+      continue;
+    }
+
+    other_attachments.push(attachment.path);
   }
-
-  const attachment_name = attachment.name.toLowerCase();
-  const content_type = attachment.contentType.toLowerCase();
-
-  if (
-    content_type.startsWith("image/") ||
-    attachment_name.includes("screenshot")
-  ) {
-    screenshot_paths.push(attachment.path);
-    continue;
-  }
-
-  if (attachment_name.includes("trace")) {
-    trace_paths.push(attachment.path);
-    continue;
-  }
-
-  if (
-    content_type.startsWith("video/") ||
-    attachment_name.includes("video")
-  ) {
-    video_paths.push(attachment.path);
-    continue;
-  }
-
-  other_attachments.push(attachment.path);
 
   return {
     screenshotPaths: screenshot_paths,
@@ -115,7 +124,6 @@ export function find_evidence(result: TestResult): EvidenceFiles {
     videoPaths: video_paths,
     otherAttachments: other_attachments,
   };
-  }
 }
   
 // Collects the available operating system, browser, project, and execution details.
@@ -195,6 +203,95 @@ export function build_report_data(
     };
 
   }
+
+export function normalize_report_data(
+  report_data: BugReportData
+): BugReportData {
+  const {
+    details,
+    evidence,
+    environment,
+    humanReview: human_review,
+    generatedAt: generated_at,
+    automatedWarning: automated_warning,
+  } = report_data;
+
+  const normalized_test_steps =
+    details.testSteps
+      .map((step) => step.trim())
+      .filter((step) => step.length > 0);
+
+  const normalized_details: FailureDetails = {
+    ...details,
+    testTitle: details.testTitle.trim(),
+    testFile: details.testFile.trim(),
+    errorMessage: details.errorMessage.trim(),
+    stackTrace: details.stackTrace
+      ? details.stackTrace.trim()
+      : details.stackTrace,
+    testSteps: normalized_test_steps,
+  };
+
+  const normalized_evidence: EvidenceFiles = {
+    screenshotPaths: evidence.screenshotPaths
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0),
+
+    tracePaths: evidence.tracePaths
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0),
+
+    videoPaths: evidence.videoPaths
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0),
+
+    otherAttachments: evidence.otherAttachments
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0),
+  };
+
+  const normalized_environment: EnvironmentDetails = {
+    ...environment,
+    operatingSystem:
+      environment.operatingSystem.trim(),
+    systemRelease:
+      environment.systemRelease.trim(),
+    projectName:
+      environment.projectName.trim(),
+    browserName:
+      environment.browserName.trim(),
+  };
+
+  const normalized_human_review: HumanReview = {
+    confirmedDefect:
+      human_review.confirmedDefect?.trim() || null,
+
+    severity:
+      human_review.severity?.trim() || null,
+
+    priority:
+      human_review.priority?.trim() || null,
+
+    finalTitle:
+      human_review.finalTitle?.trim() || null,
+
+    notes:
+      human_review.notes?.trim() || null,
+
+    ticketUrl:
+      human_review.ticketUrl?.trim() || null,
+  };
+
+  return {
+    details: normalized_details,
+    evidence: normalized_evidence,
+    environment: normalized_environment,
+    humanReview: normalized_human_review,
+    generatedAt: generated_at,
+    automatedWarning: automated_warning.trim(),
+  };
+}
+
 export function format_markdown(
   report_data: BugReportData
 ): string {
@@ -402,10 +499,8 @@ export function format_markdown(
 
   let confirmed_defect_value: string;
 
-  if (human_review.confirmedDefect === true) {
-    confirmed_defect_value = "Yes";
-  } else if (human_review.confirmedDefect === false) {
-    confirmed_defect_value = "No";
+  if (human_review.confirmedDefect) {
+    confirmed_defect_value = human_review.confirmedDefect;
   } else {
     confirmed_defect_value = "Pending";
   }
@@ -498,46 +593,57 @@ export function format_plain_text(
     automatedWarning: automated_warning,
   } = report_data;
 
-    const duration_seconds =
-      (details.durationMs / 1000).toFixed(2);
+  const duration_seconds =
+    (details.durationMs / 1000).toFixed(2);
 
-    const test_location =
-      `${details.testFile}:${details.lineNumber}:${details.columnNumber}`;
+  const test_location =
+    `${details.testFile}:${details.lineNumber}:${details.columnNumber}`;
 
-    const formatted_start_time =
-      details.startTime.toISOString(); 
+  const formatted_start_time =
+    details.startTime.toISOString();
 
-    const formatted_execution_time =
-      environment.executionTime.toISOString();
+  const formatted_execution_time =
+    environment.executionTime.toISOString();
 
-    const formatted_generated_at =
-      generated_at.toISOString(); 
+  const formatted_generated_at =
+    generated_at.toISOString();
 
-    const text_lines: string[] =[]
-    
-    text_lines.push(`BUG REPORT: ${details.testTitle}`);
+  const text_lines: string[] = [];
 
-    text_lines.push("")
-    
-    text_lines.push(automated_warning)
+  text_lines.push(
+    `BUG REPORT: ${details.testTitle}`
+  );
 
-    text_lines.push("")
+  text_lines.push("");
+  text_lines.push(automated_warning);
+  text_lines.push("");
 
-    text_lines.push("TEST SUMMARY")
+  text_lines.push("TEST SUMMARY");
+  text_lines.push("--------------------");
 
-    text_lines.push("---------------")
+  text_lines.push(
+    `Test Title: ${details.testTitle}`
+  );
 
-    text_lines.push(`Test Title: ${details.testTitle}`);
+  text_lines.push(
+    `Status: ${details.status}`
+  );
 
-  text_lines.push(`Status: ${details.status}`);
+  text_lines.push(
+    `Location: ${test_location}`
+  );
 
-  text_lines.push(`Location: ${test_location}`);
+  text_lines.push(
+    `Start Time: ${formatted_start_time}`
+  );
 
-  text_lines.push(`Start Time: ${formatted_start_time}`);
+  text_lines.push(
+    `Duration: ${duration_seconds} seconds`
+  );
 
-  text_lines.push(`Duration: ${duration_seconds} seconds`);
-
-  text_lines.push(`Retry Number: ${details.retryNumber}`);
+  text_lines.push(
+    `Retry Number: ${details.retryNumber}`
+  );
 
   text_lines.push("");
 
@@ -551,21 +657,284 @@ export function format_plain_text(
 
   if (details.stackTrace) {
     text_lines.push(details.stackTrace);
-  }else{
+  } else {
     text_lines.push("Not available");
   }
-  
-  if (details.testSteps.length === 0)
-      text_lines.push("No test steps recorded")
-  else{
-    
-    let step_number = 1
 
-    for ( const step of details.testSteps){
+  text_lines.push("");
+
+  text_lines.push("TEST STEPS");
+  text_lines.push("--------------------");
+
+  if (details.testSteps.length === 0) {
+    text_lines.push("No test steps recorded");
+  } else {
+    let step_number = 1;
+
+    for (const step of details.testSteps) {
       text_lines.push(
         `${step_number}. ${step}`
-    );
+      );
+
       step_number++;
+    }
   }
+
   text_lines.push("");
+
+  text_lines.push("ENVIRONMENT");
+  text_lines.push("--------------------");
+
+  text_lines.push(
+    `Operating System: ${environment.operatingSystem}`
+  );
+
+  text_lines.push(
+    `System Release: ${environment.systemRelease}`
+  );
+
+  text_lines.push(
+    `Project Name: ${environment.projectName}`
+  );
+
+  text_lines.push(
+    `Browser Name: ${environment.browserName}`
+  );
+
+  text_lines.push(
+    `Execution Time: ${formatted_execution_time}`
+  );
+
+  text_lines.push(
+    `Report Generated At: ${formatted_generated_at}`
+  );
+
+  text_lines.push("");
+
+  text_lines.push("EVIDENCE");
+  text_lines.push("--------------------");
+
+  text_lines.push("Screenshots:");
+
+  if (evidence.screenshotPaths.length === 0) {
+    text_lines.push("No screenshots captured");
+  } else {
+    for (
+      const screenshot_path
+      of evidence.screenshotPaths
+    ) {
+      text_lines.push(
+        `- ${screenshot_path}`
+      );
+    }
+  }
+
+  text_lines.push("");
+
+  text_lines.push("Traces:");
+
+  if (evidence.tracePaths.length === 0) {
+    text_lines.push("No traces captured");
+  } else {
+    for (const trace_path of evidence.tracePaths) {
+      text_lines.push(
+        `- ${trace_path}`
+      );
+    }
+  }
+
+  text_lines.push("");
+
+  text_lines.push("Videos:");
+
+  if (evidence.videoPaths.length === 0) {
+    text_lines.push("No videos captured");
+  } else {
+    for (const video_path of evidence.videoPaths) {
+      text_lines.push(
+        `- ${video_path}`
+      );
+    }
+  }
+
+  text_lines.push("");
+
+  text_lines.push("Other Attachments:");
+
+  if (evidence.otherAttachments.length === 0) {
+    text_lines.push(
+      "No other attachments captured"
+    );
+  } else {
+    for (
+      const other_attachment
+      of evidence.otherAttachments
+    ) {
+      text_lines.push(
+        `- ${other_attachment}`
+      );
+    }
+  }
+
+  text_lines.push("");
+
+  text_lines.push("HUMAN REVIEW");
+  text_lines.push("--------------------");
+
+  let confirmed_defect_value: string;
+
+  if (human_review.confirmedDefect) {
+    confirmed_defect_value =
+      human_review.confirmedDefect;
+  } else {
+    confirmed_defect_value = "Pending review";
+  }
+
+  text_lines.push(
+    `Confirmed Defect: ${confirmed_defect_value}`
+  );
+
+  let severity_value: string;
+
+  if (human_review.severity) {
+    severity_value = human_review.severity;
+  } else {
+    severity_value = "Pending review";
+  }
+
+  text_lines.push(
+    `Severity: ${severity_value}`
+  );
+
+  let priority_value: string;
+
+  if (human_review.priority) {
+    priority_value = human_review.priority;
+  } else {
+    priority_value = "Pending review";
+  }
+
+  text_lines.push(
+    `Priority: ${priority_value}`
+  );
+
+  let final_title_value: string;
+
+  if (human_review.finalTitle) {
+    final_title_value = human_review.finalTitle;
+  } else {
+    final_title_value = "Pending review";
+  }
+
+  text_lines.push(
+    `Final Title: ${final_title_value}`
+  );
+
+  let notes_value: string;
+
+  if (human_review.notes) {
+    notes_value = human_review.notes;
+  } else {
+    notes_value = "Pending";
+  }
+
+  text_lines.push(
+    `Notes: ${notes_value}`
+  );
+
+  let ticket_url_value: string;
+
+  if (human_review.ticketUrl) {
+    ticket_url_value = human_review.ticketUrl;
+  } else {
+    ticket_url_value = "Pending";
+  }
+
+  text_lines.push(
+    `Ticket URL: ${ticket_url_value}`
+  );
+
+  return text_lines.join("\n");
+}
+
+export function generate_bug_report(
+  report_data: BugReportData,
+  output_format: "markdown" | "json" | "plain_text"
+): string{
+
+    const normalized_report_data =
+      normalize_report_data(report_data);
+
+    if (output_format === "markdown"){
+        return format_markdown(normalized_report_data);
+    }
+
+    else if (output_format === "json"){
+      return format_json(normalized_report_data);
+    }
+    else if (output_format === "plain_text") {
+      return format_plain_text(normalized_report_data);
+    }
+    else{
+      throw new Error(
+        `Unsupported report format: ${output_format}`
+      )
+    }
+  }
+
+export async function save_bug_report(
+  failure: FailedTest,
+  output_directory: string,
+  output_format: "markdown" | "json" | "plain_text"
+): Promise<string> {
+  const details =
+    collect_failure_details(failure);
+
+  const evidence =
+    find_evidence(failure.result);
+
+  const environment =
+    collect_environment(failure);
+
+  const report_data =
+    build_report_data(
+      details,
+      evidence,
+      environment
+    );
+
+  const report_contents =
+    generate_bug_report(
+      report_data,
+      output_format
+    );
+
+  const markdown_filename =
+    make_filename(report_data);
+
+  let output_extension: string;
+
+  if (output_format === "markdown") {
+    output_extension = ".md";
+  } else if (output_format === "json") {
+    output_extension = ".json";
+  } else {
+    output_extension = ".txt";
+  }
+
+  const output_filename =
+    markdown_filename.replace(
+      /\.md$/,
+      output_extension
+    );
+
+  const output_path =
+    join(output_directory, output_filename);
+
+  await save_file(
+    output_path,
+    report_contents
+  );
+
+  return output_path;
 }

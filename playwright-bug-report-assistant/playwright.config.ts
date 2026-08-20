@@ -5,7 +5,8 @@ export default defineConfig({
     outputDir: "test-results",
 
     reporter: [
-        ["list"],
+      ["list"],
+      ["./src/bug-report-reporter.ts"],
     ],
 
     use: {
