@@ -57,7 +57,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from pydantic import BaseModel, Field, ValidationError
 from tkinter import filedialog
-import math
+
 
 APP_TITLE = "Business Financial Analyzer — Schedule C & Virtual CFO"
 DEFAULT_AI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5")
@@ -352,137 +352,6 @@ def _find_column(df: pd.DataFrame, candidates: Iterable[str], label: str) -> str
         if candidate in normalized:
             return normalized[candidate]
     raise ValueError(f"Could not find a supported {label} column.")
-
-def validate_statement_data(
-    dataframe: pd.DataFrame,
-    source_file: str,
-) -> pd.DataFrame:
-
-   def validate_statement_data(
-    df: pd.DataFrame,
-    source_file: str,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Validate statement rows and return valid transactions and issues."""
-
-    required_statement_columns = {
-        "Date",
-        "Description",
-        "Amount",
-    }
-
-    missing_columns = required_statement_columns.difference(df.columns)
-
-    if missing_columns:
-        missing_columns_text = ", ".join(sorted(missing_columns))
-
-        raise ValueError(
-            f"{source_file} is missing required column(s): "
-            f"{missing_columns_text}"
-        )
-
-    validated_df = df.copy()
-    validation_records: list[dict[str, object]] = []
-    valid_indexes: list[object] = []
-
-    for spreadsheet_position, (index, row) in enumerate(
-        validated_df.iterrows(),
-        start=2,
-    ):
-        original_row_number = spreadsheet_position
-
-        date_value = row["Date"]
-        description_value = row["Description"]
-        amount_value = row["Amount"]
-
-        row_issues: list[str] = []
-        exclude_row = False
-
-        parsed_date = pd.to_datetime(
-            date_value,
-            errors="coerce",
-        )
-
-        if pd.isna(parsed_date):
-            row_issues.append("Date is missing or invalid.")
-            exclude_row = True
-        else:
-            validated_df.at[index, "Date"] = parsed_date
-
-        parsed_amount = pd.to_numeric(
-            amount_value,
-            errors="coerce",
-        )
-
-        if (
-            pd.isna(parsed_amount)
-            or not math.isfinite(float(parsed_amount))
-        ):
-            row_issues.append(
-                "Amount is missing, invalid, or not finite."
-            )
-            exclude_row = True
-        else:
-            validated_df.at[index, "Amount"] = float(parsed_amount)
-
-        if (
-            pd.isna(description_value)
-            or not str(description_value).strip()
-        ):
-            description_value = "Missing description"
-            validated_df.at[index, "Description"] = description_value
-            row_issues.append(
-                "Description is missing; placeholder added."
-            )
-        else:
-            validated_df.at[index, "Description"] = (
-                str(description_value).strip()
-            )
-
-        if row_issues:
-            issue_text = " ".join(row_issues)
-
-            if exclude_row:
-                action = "Excluded"
-            else:
-                action = "Retained for review"
-
-            validation_record = {
-                "Source File": str(source_file),
-                "Spreadsheet Row": original_row_number,
-                "Date Value": date_value,
-                "Description Value": description_value,
-                "Amount Value": amount_value,
-                "Issue": issue_text,
-                "Action": action,
-            }
-
-            validation_records.append(validation_record)
-
-        if not exclude_row:
-            valid_indexes.append(index)
-
-    valid_transactions = validated_df.loc[valid_indexes].copy()
-    valid_transactions.reset_index(drop=True, inplace=True)
-
-    if valid_transactions.empty:
-        raise ValueError(
-            f"{source_file} contains no valid transactions."
-        )
-
-    validation_issues = pd.DataFrame(
-        validation_records,
-        columns=[
-            "Source File",
-            "Spreadsheet Row",
-            "Date Value",
-            "Description Value",
-            "Amount Value",
-            "Issue",
-            "Action",
-        ],
-    )
-
-    return valid_transactions, validation_issues
 
 def read_and_combine_statements(paths: list[str]) -> pd.DataFrame:
     """Load, standardize, and combine bank statements."""
@@ -922,11 +791,6 @@ def enrich_transactions(
 
     return enriched
 
-
-def detect_duplicate_transactions(
-    dataframe: pd.DataFrame,
-) -> pd.DataFrame:
-
 def calculate_metrics(df: pd.DataFrame) -> BusinessMetrics:
     """Calculate business health and overhead metrics."""
     revenue = float(df["Revenue"].sum())
@@ -963,25 +827,6 @@ def build_monthly_summary(df: pd.DataFrame) -> pd.DataFrame:
         np.nan,
     )
     return grouped
-
-def calculate_percentage_change(
-    current_value: float,
-    comparison_value: float,
-) -> Optional[float]:
-
-def build_monthly_comparisons(
-    monthly_summary: pd.DataFrame,
-) -> pd.DataFrame:
-
-def build_category_comparisons(
-    transactions: pd.DataFrame,
-) -> pd.DataFrame:
-
-def determine_alert_severity(
-    alert_type: str,
-    percentage_change: Optional[float],
-    dollar_change: float,
-) -> str:
 
 def build_tax_summary(df: pd.DataFrame) -> pd.DataFrame:
     """Summarize expense transactions by official Schedule C Part II line."""
@@ -1203,49 +1048,6 @@ def detect_anomalies(df: pd.DataFrame) -> pd.DataFrame:
         ]
     )
 
-def determine_alert_severity(
-    alert_type: str,
-    percentage_change: Optional[float],
-    dollar_change: float,
-) -> str:
-
-def build_financial_alerts(
-    monthly_comparisons: pd.DataFrame,
-    category_comparisons: pd.DataFrame,
-    duplicate_transactions: pd.DataFrame,
-    anomalies: pd.DataFrame,
-) -> pd.DataFrame:
-
-def _build_json_safe_records(
-    dataframe: pd.DataFrame,
-    record_limit: Optional[int] = None,
-    round_decimals: Optional[int] = None,
-) -> list[dict[str, object]]:
-    """Convert a DataFrame to compact records accepted by strict JSON encoders."""
-    selected = (
-        dataframe.copy()
-        if record_limit is None
-        else dataframe.head(record_limit).copy()
-    )
-
-    if round_decimals is not None:
-        selected = selected.round(round_decimals)
-
-    selected = selected.replace(
-        [float("inf"), float("-inf")],
-        None,
-    )
-    selected = selected.astype(object).where(pd.notna(selected), None)
-
-    return json.loads(
-        json.dumps(
-            selected.to_dict("records"),
-            default=str,
-            allow_nan=False,
-        )
-    )
-
-
 def build_cfo_payload(
     df: pd.DataFrame,
     metrics: BusinessMetrics,
@@ -1253,15 +1055,8 @@ def build_cfo_payload(
     tax_summary: pd.DataFrame,
     saas_audit: pd.DataFrame,
     anomalies: pd.DataFrame,
-    monthly_comparisons: pd.DataFrame,
-    category_comparisons: pd.DataFrame,
-    duplicate_transactions: pd.DataFrame,
-    financial_alerts: pd.DataFrame,
 ) -> dict[str, object]:
     """Prepare compact, validated business data for the virtual CFO."""
-    monthly_record_limit = 24
-    detailed_finding_limit = 15
-
     top_categories = (
         df[df["Transaction Type"].eq("Expense")]
         .groupby("Schedule C Category")["Book Expense"]
@@ -1291,50 +1086,14 @@ def build_cfo_payload(
             "transactions": metrics.transaction_count,
             "expense_transactions_requiring_review": review_count,
         },
-        "monthly": _build_json_safe_records(
-            monthly,
-            record_limit=monthly_record_limit,
-            round_decimals=2,
-        ),
-        "monthly_comparisons": _build_json_safe_records(
-            monthly_comparisons,
-            record_limit=monthly_record_limit,
-            round_decimals=2,
-        ),
-        "category_comparisons": _build_json_safe_records(
-            category_comparisons,
-            record_limit=detailed_finding_limit,
-            round_decimals=2,
-        ),
+        "monthly": monthly.round(2).to_dict("records"),
         "top_schedule_c_expense_categories": [
-            {"category": str(category), "amount": round(float(amount), 2)}
+            {"category": category, "amount": round(float(amount), 2)}
             for category, amount in top_categories.items()
         ],
-        "saas_findings": _build_json_safe_records(
-            saas_audit,
-            record_limit=detailed_finding_limit,
-            round_decimals=2,
-        ),
-        "anomalies": _build_json_safe_records(
-            anomalies,
-            record_limit=detailed_finding_limit,
-            round_decimals=2,
-        ),
-        "duplicate_transactions": _build_json_safe_records(
-            duplicate_transactions,
-            record_limit=detailed_finding_limit,
-            round_decimals=2,
-        ),
-        "financial_alerts": _build_json_safe_records(
-            financial_alerts,
-            record_limit=detailed_finding_limit,
-            round_decimals=2,
-        ),
-        "tax_summary": _build_json_safe_records(
-            tax_summary,
-            record_limit=len(SCHEDULE_C_LINE_ORDER),
-            round_decimals=2,
-        ),
+        "saas_findings": saas_audit.head(15).to_dict("records"),
+        "anomalies": anomalies.head(15).to_dict("records"),
+        "tax_summary": tax_summary.head(len(SCHEDULE_C_LINE_ORDER)).to_dict("records"),
     }
 
 def generate_cfo_insights(
@@ -1388,11 +1147,8 @@ def generate_cfo_insights(
             ),
             overhead_analysis=overhead_text,
             anomalies_and_controls=(
-                f"{len(payload['financial_alerts'])} prioritized financial "
-                f"alert(s), {len(payload['anomalies'])} anomaly finding(s), "
-                f"and {len(payload['duplicate_transactions'])} possible "
-                "duplicate transaction(s) were identified for management "
-                "review."
+                f"{len(payload['anomalies'])} anomaly finding(s) were "
+                "identified for management review."
             ),
             saas_leak_review=(
                 f"{len(payload['saas_findings'])} SaaS-related finding(s) "
@@ -1482,11 +1238,6 @@ Analyze:
 - expense concentration,
 - operating efficiency.
 
-Use the supplied monthly and expense-category comparisons as calculated
-evidence. Preserve current values, comparison values, dollar changes, and
-percentage changes. If a comparison is missing, describe the history as
-insufficient; never treat a missing comparison as zero.
-
 OVERHEAD ANALYSIS
 
 State exactly what percentage of incoming revenue is consumed by operating
@@ -1506,10 +1257,6 @@ Identify:
 - utility increases,
 - duplicate charges,
 - control weaknesses supported by the data.
-
-Use prioritized financial alerts, their supporting evidence, severity, and
-recommended-review fields when supplied. Treat duplicate-transaction findings
-as possible duplicates requiring review, not confirmed duplicate charges.
 
 SAAS LEAK REVIEW
 
@@ -3247,10 +2994,6 @@ def export_pdf_report(
     saas_audit: pd.DataFrame,
     anomalies: pd.DataFrame,
     insights: CFOInsightResponse,
-    monthly_comparisons: pd.DataFrame,
-    category_comparisons: pd.DataFrame,
-    duplicate_transactions: pd.DataFrame,
-    financial_alerts: pd.DataFrame,
 ) -> None:
     """Generate the complete graph-enabled CFO and accountant PDF report."""
     destination = Path(output_path)
@@ -3302,161 +3045,7 @@ def export_pdf_report(
         bottomMargin=0.5 * inch,
     )
 
-    story: list[object] = []
-    detailed_table_row_limit = 25
-    comparison_table_row_limit = 24
-    empty_finding_text = "No findings were identified for this section."
-
-    report_table_cell_style = ParagraphStyle(
-        name="ReportTableCell",
-        parent=styles["BodyText"],
-        fontName="Helvetica",
-        fontSize=6.5,
-        leading=8,
-        spaceAfter=0,
-        wordWrap="CJK",
-    )
-
-    report_table_header_style = ParagraphStyle(
-        name="ReportTableHeader",
-        parent=report_table_cell_style,
-        fontName="Helvetica-Bold",
-        textColor=colors.white,
-    )
-
-    def format_report_value(value: object) -> str:
-        """Format a supplied dataframe value without changing its meaning."""
-        if pd.isna(value):
-            return "N/A"
-
-        if hasattr(value, "strftime"):
-            return value.strftime("%Y-%m-%d")
-
-        if isinstance(value, float):
-            return f"{value:,.2f}"
-
-        return str(value)
-
-    def append_dataframe_section(
-        title: str,
-        description: str,
-        dataframe: pd.DataFrame,
-        row_limit: int,
-    ) -> None:
-        """Append a compact, schema-independent dataframe section."""
-        story.append(
-            Paragraph(
-                title,
-                styles["SectionHeading"],
-            )
-        )
-        story.append(
-            Paragraph(
-                description,
-                styles["BodyCustom"],
-            )
-        )
-
-        if dataframe.empty:
-            story.append(
-                Paragraph(
-                    empty_finding_text,
-                    styles["BodyCustom"],
-                )
-            )
-            return
-
-        selected_columns = list(dataframe.columns)
-        column_width = 7.1 * inch / len(selected_columns)
-
-        table_rows = [
-            [
-                Paragraph(
-                    escape(str(column).replace("_", " ").title()),
-                    report_table_header_style,
-                )
-                for column in selected_columns
-            ]
-        ]
-
-        for row in dataframe.head(row_limit).itertuples(
-            index=False,
-            name=None,
-        ):
-            table_rows.append(
-                [
-                    Paragraph(
-                        escape(format_report_value(value)),
-                        report_table_cell_style,
-                    )
-                    for value in row
-                ]
-            )
-
-        report_table = Table(
-            table_rows,
-            colWidths=[column_width] * len(selected_columns),
-            repeatRows=1,
-            hAlign="LEFT",
-        )
-        report_table.setStyle(
-            TableStyle(
-                [
-                    (
-                        "BACKGROUND",
-                        (0, 0),
-                        (-1, 0),
-                        colors.HexColor("#17365D"),
-                    ),
-                    (
-                        "VALIGN",
-                        (0, 0),
-                        (-1, -1),
-                        "TOP",
-                    ),
-                    (
-                        "GRID",
-                        (0, 0),
-                        (-1, -1),
-                        0.35,
-                        colors.HexColor("#D5DCE3"),
-                    ),
-                    (
-                        "ROWBACKGROUNDS",
-                        (0, 1),
-                        (-1, -1),
-                        [colors.white, colors.HexColor("#F8FAFC")],
-                    ),
-                    (
-                        "LEFTPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        4,
-                    ),
-                    (
-                        "RIGHTPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        4,
-                    ),
-                    (
-                        "TOPPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        4,
-                    ),
-                    (
-                        "BOTTOMPADDING",
-                        (0, 0),
-                        (-1, -1),
-                        4,
-                    ),
-                ]
-            )
-        )
-
-        story.append(report_table)
-        story.append(Spacer(1, 10))
+    story = []
 
     start_date = (
         transactions["Date"]
@@ -4044,56 +3633,6 @@ def export_pdf_report(
         story.append(tax_table)
 
         # -------------------------------------------------
-        # PHASE 1 COMPARISONS AND FINANCIAL CONTROLS
-        # -------------------------------------------------
-
-        story.append(PageBreak())
-
-        append_dataframe_section(
-            "Monthly Historical Comparisons",
-            (
-                "Calculated period-over-period results. Missing comparison "
-                "values indicate insufficient history and are not treated "
-                "as zero."
-            ),
-            monthly_comparisons,
-            comparison_table_row_limit,
-        )
-
-        append_dataframe_section(
-            "Expense Category Comparisons",
-            (
-                "Calculated changes in spending by expense category for "
-                "management review."
-            ),
-            category_comparisons,
-            detailed_table_row_limit,
-        )
-
-        story.append(PageBreak())
-
-        append_dataframe_section(
-            "Possible Duplicate Transactions",
-            (
-                "Transactions with matching evidence that may represent "
-                "duplicates. These findings require review and are not "
-                "confirmed duplicate charges."
-            ),
-            duplicate_transactions,
-            detailed_table_row_limit,
-        )
-
-        append_dataframe_section(
-            "Prioritized Financial Alerts",
-            (
-                "Calculated financial alerts, supporting evidence, severity, "
-                "and review guidance supplied by the analyzer."
-            ),
-            financial_alerts,
-            detailed_table_row_limit,
-        )
-
-        # -------------------------------------------------
         # SAAS LEAK REVIEW
         # -------------------------------------------------
 
@@ -4575,7 +4114,7 @@ def export_pdf_report(
             document.build(
                 story
             )
-            
+
 def main() -> None:
     """Run the business analyzer and generate the PDF CFO report."""
     load_environment()
@@ -4790,4 +4329,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-                   
