@@ -125,7 +125,8 @@ SAAS_VENDORS = {
     "docusign": ("DocuSign", "E-Signature"),
     "loom": ("Loom", "Video Communication"),
 }
-
+HIGH_DUPLICATE_AMOUNT = 500.00
+HIGH_DUPLICATE_COUNT = 3
 
 class ScheduleCCategory(str, Enum):
     ADVERTISING = "8 - Advertising"
@@ -791,6 +792,190 @@ def enrich_transactions(
 
     return enriched
 
+def detect_duplicate_transactions(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    """Identify transactions that may represent duplicate expense charges."""
+    required_columns = {
+        "Transaction ID",
+        "Date",
+        "Transaction Type",
+        "Merchant Key",
+        "Book Expense",
+    }
+
+    output_columns = [
+        "Date",
+        "Merchant",
+        "Amount",
+        "Charge Count",
+        "Potential Duplicate Amount",
+        "Transaction IDs",
+        "Severity",
+        "Reason",
+    ]
+
+    missing_columns = sorted(
+        required_columns.difference(dataframe.columns)
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Cannot detect duplicate transactions because the "
+            "following required columns are missing: "
+            + ", ".join(missing_columns)
+        )
+
+    expenses = dataframe.loc[
+        dataframe["Transaction Type"].eq("Expense"),
+        [
+            "Transaction ID",
+            "Date",
+            "Merchant Key",
+            "Book Expense",
+        ],
+    ].copy()
+
+    expenses["Date"] = pd.to_datetime(
+        expenses["Date"],
+        errors="coerce",
+    ).dt.normalize()
+
+    expenses["Book Expense"] = pd.to_numeric(
+        expenses["Book Expense"],
+        errors="coerce",
+    )
+
+    expenses["Merchant Key"] = (
+        expenses["Merchant Key"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    expenses = expenses.dropna(
+        subset=[
+            "Transaction ID",
+            "Date",
+            "Book Expense",
+        ]
+    )
+
+    expenses = expenses.loc[
+        expenses["Merchant Key"].ne("")
+        & expenses["Book Expense"].gt(0)
+    ].copy()
+
+    if expenses.empty:
+        return pd.DataFrame(
+            columns=output_columns
+        )
+
+    findings: list[dict[str, object]] = []
+
+    grouped_expenses = expenses.groupby(
+        [
+            "Date",
+            "Merchant Key",
+            "Book Expense",
+        ],
+        sort=True,
+    )
+
+    for (
+        date,
+        merchant,
+        amount,
+    ), group in grouped_expenses:
+        charge_count = len(group)
+
+        if charge_count < 2:
+            continue
+
+        potential_duplicate_amount = round(
+            float(amount) * (charge_count - 1),
+            2,
+        )
+
+        transaction_ids = sorted(
+            int(transaction_id)
+            for transaction_id in group["Transaction ID"]
+        )
+
+        severity = (
+            "High"
+            if (
+                charge_count >= HIGH_DUPLICATE_COUNT
+                or potential_duplicate_amount
+                >= HIGH_DUPLICATE_AMOUNT
+            )
+            else "Review"
+        )
+
+        findings.append(
+            {
+                "Date": date,
+                "Merchant": merchant,
+                "Amount": round(float(amount), 2),
+                "Charge Count": charge_count,
+                "Potential Duplicate Amount": (
+                    potential_duplicate_amount
+                ),
+                "Transaction IDs": ", ".join(
+                    str(transaction_id)
+                    for transaction_id in transaction_ids
+                ),
+                "Severity": severity,
+                "Reason": (
+                    f"{charge_count} expense transactions have "
+                    "the same date, normalized merchant, and amount. "
+                    "Review the original statement and supporting "
+                    "records before treating them as duplicates."
+                ),
+            }
+        )
+
+    if not findings:
+        return pd.DataFrame(
+            columns=output_columns
+        )
+
+    duplicate_transactions = pd.DataFrame(
+        findings,
+        columns=output_columns,
+    )
+
+    severity_order = {
+        "High": 0,
+        "Review": 1,
+    }
+
+    duplicate_transactions["_severity_order"] = (
+        duplicate_transactions["Severity"]
+        .map(severity_order)
+        .fillna(len(severity_order))
+    )
+
+    duplicate_transactions = (
+        duplicate_transactions
+        .sort_values(
+            [
+                "_severity_order",
+                "Potential Duplicate Amount",
+                "Date",
+            ],
+            ascending=[
+                True,
+                False,
+                False,
+            ],
+        )
+        .drop(columns="_severity_order")
+        .reset_index(drop=True)
+    )
+
+    return duplicate_transactions
+
 def calculate_metrics(df: pd.DataFrame) -> BusinessMetrics:
     """Calculate business health and overhead metrics."""
     revenue = float(df["Revenue"].sum())
@@ -827,6 +1012,484 @@ def build_monthly_summary(df: pd.DataFrame) -> pd.DataFrame:
         np.nan,
     )
     return grouped
+
+def calculate_percentage_change(
+    current_value: float,
+    comparison_value: float,
+) -> Optional[float]:
+    """Calculate the percentage change between two financial values."""
+    try:
+        current_number = float(current_value)
+        comparison_number = float(comparison_value)
+    except (TypeError, ValueError):
+        return None
+
+    if not (
+        math.isfinite(current_number)
+        and math.isfinite(comparison_number)
+    ):
+        return None
+
+    if (
+        current_number == 0
+        and comparison_number == 0
+    ):
+        return 0.0
+
+    if comparison_number == 0:
+        return None
+
+    difference = (
+        current_number
+        - comparison_number
+    )
+
+    percentage_change = (
+        difference
+        / abs(comparison_number)
+    )
+
+    return percentage_change
+
+def build_monthly_comparisons(
+    monthly_summary: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compare each month with the most recent available earlier month."""
+    required_columns = {
+        "Month",
+        "Revenue",
+        "Expenses",
+        "Net Operating Cash",
+    }
+
+    output_columns = [
+        "Month",
+        "Comparison Month",
+        "Current Revenue",
+        "Comparison Revenue",
+        "Revenue Change",
+        "Revenue Change %",
+        "Current Expenses",
+        "Comparison Expenses",
+        "Expense Change",
+        "Expense Change %",
+        "Current Net Operating Cash",
+        "Comparison Net Operating Cash",
+        "Net Operating Cash Change",
+        "Net Operating Cash Change %",
+    ]
+
+    missing_columns = sorted(
+        required_columns.difference(
+            monthly_summary.columns
+        )
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Cannot build monthly comparisons because the "
+            "following required columns are missing: "
+            + ", ".join(missing_columns)
+        )
+
+    prepared_summary = monthly_summary[
+        [
+            "Month",
+            "Revenue",
+            "Expenses",
+            "Net Operating Cash",
+        ]
+    ].copy()
+
+    prepared_summary["Month"] = pd.to_datetime(
+        prepared_summary["Month"].astype(str),
+        errors="coerce",
+    ).dt.to_period("M")
+
+    financial_columns = [
+        "Revenue",
+        "Expenses",
+        "Net Operating Cash",
+    ]
+
+    for column_name in financial_columns:
+        prepared_summary[column_name] = pd.to_numeric(
+            prepared_summary[column_name],
+            errors="coerce",
+        )
+
+    prepared_summary = prepared_summary.replace(
+        [np.inf, -np.inf],
+        np.nan,
+    )
+
+    prepared_summary = prepared_summary.dropna(
+        subset=[
+            "Month",
+            "Revenue",
+            "Expenses",
+            "Net Operating Cash",
+        ]
+    )
+
+    prepared_summary = (
+        prepared_summary
+        .sort_values("Month")
+        .reset_index(drop=True)
+    )
+
+    if len(prepared_summary) < 2:
+        return pd.DataFrame(
+            columns=output_columns
+        )
+
+    comparisons: list[dict[str, object]] = []
+
+    for row_index in range(
+        1,
+        len(prepared_summary),
+    ):
+        current_row = prepared_summary.iloc[
+            row_index
+        ]
+
+        comparison_row = prepared_summary.iloc[
+            row_index - 1
+        ]
+
+        current_revenue = float(
+            current_row["Revenue"]
+        )
+
+        comparison_revenue = float(
+            comparison_row["Revenue"]
+        )
+
+        current_expenses = float(
+            current_row["Expenses"]
+        )
+
+        comparison_expenses = float(
+            comparison_row["Expenses"]
+        )
+
+        current_net_cash = float(
+            current_row["Net Operating Cash"]
+        )
+
+        comparison_net_cash = float(
+            comparison_row["Net Operating Cash"]
+        )
+
+        revenue_change = (
+            current_revenue
+            - comparison_revenue
+        )
+
+        expense_change = (
+            current_expenses
+            - comparison_expenses
+        )
+
+        net_cash_change = (
+            current_net_cash
+            - comparison_net_cash
+        )
+
+        comparisons.append(
+            {
+                "Month": str(
+                    current_row["Month"]
+                ),
+                "Comparison Month": str(
+                    comparison_row["Month"]
+                ),
+                "Current Revenue": round(
+                    current_revenue,
+                    2,
+                ),
+                "Comparison Revenue": round(
+                    comparison_revenue,
+                    2,
+                ),
+                "Revenue Change": round(
+                    revenue_change,
+                    2,
+                ),
+                "Revenue Change %": (
+                    calculate_percentage_change(
+                        current_revenue,
+                        comparison_revenue,
+                    )
+                ),
+                "Current Expenses": round(
+                    current_expenses,
+                    2,
+                ),
+                "Comparison Expenses": round(
+                    comparison_expenses,
+                    2,
+                ),
+                "Expense Change": round(
+                    expense_change,
+                    2,
+                ),
+                "Expense Change %": (
+                    calculate_percentage_change(
+                        current_expenses,
+                        comparison_expenses,
+                    )
+                ),
+                "Current Net Operating Cash": round(
+                    current_net_cash,
+                    2,
+                ),
+                "Comparison Net Operating Cash": round(
+                    comparison_net_cash,
+                    2,
+                ),
+                "Net Operating Cash Change": round(
+                    net_cash_change,
+                    2,
+                ),
+                "Net Operating Cash Change %": (
+                    calculate_percentage_change(
+                        current_net_cash,
+                        comparison_net_cash,
+                    )
+                ),
+            }
+        )
+
+    return pd.DataFrame(
+        comparisons,
+        columns=output_columns,
+    )
+
+def build_category_comparisons(
+    transactions: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compare monthly spending within each Schedule C expense category."""
+    required_columns = {
+        "Month",
+        "Transaction Type",
+        "Schedule C Category",
+        "Book Expense",
+    }
+
+    output_columns = [
+        "Month",
+        "Comparison Month",
+        "Category",
+        "Current Expenses",
+        "Comparison Expenses",
+        "Expense Change",
+        "Expense Change %",
+    ]
+
+    missing_columns = sorted(
+        required_columns.difference(
+            transactions.columns
+        )
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "Cannot build category comparisons because the "
+            "following required columns are missing: "
+            + ", ".join(missing_columns)
+        )
+
+    prepared_transactions = transactions[
+        [
+            "Month",
+            "Transaction Type",
+            "Schedule C Category",
+            "Book Expense",
+        ]
+    ].copy()
+
+    prepared_transactions["Month"] = pd.to_datetime(
+        prepared_transactions["Month"].astype(str),
+        errors="coerce",
+    ).dt.to_period("M")
+
+    prepared_transactions["Book Expense"] = pd.to_numeric(
+        prepared_transactions["Book Expense"],
+        errors="coerce",
+    )
+
+    prepared_transactions["Schedule C Category"] = (
+        prepared_transactions["Schedule C Category"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    prepared_transactions = prepared_transactions.replace(
+        [np.inf, -np.inf],
+        np.nan,
+    )
+
+    available_months = sorted(
+        prepared_transactions["Month"]
+        .dropna()
+        .unique()
+    )
+
+    expenses = prepared_transactions.loc[
+        prepared_transactions["Transaction Type"].eq(
+            "Expense"
+        )
+    ].copy()
+
+    expenses = expenses.dropna(
+        subset=[
+            "Month",
+            "Book Expense",
+        ]
+    )
+
+    expenses = expenses.loc[
+        expenses["Schedule C Category"].ne("")
+        & expenses["Book Expense"].gt(0)
+    ].copy()
+
+    categories = sorted(
+        expenses["Schedule C Category"]
+        .unique()
+    )
+
+    if (
+        len(available_months) < 2
+        or not categories
+    ):
+        return pd.DataFrame(
+            columns=output_columns
+        )
+
+    category_totals = (
+        expenses
+        .groupby(
+            [
+                "Month",
+                "Schedule C Category",
+            ]
+        )["Book Expense"]
+        .sum()
+    )
+
+    comparisons: list[dict[str, object]] = []
+
+    for month_index in range(
+        1,
+        len(available_months),
+    ):
+        current_month = available_months[
+            month_index
+        ]
+
+        comparison_month = available_months[
+            month_index - 1
+        ]
+
+        for category in categories:
+            current_expenses = float(
+                category_totals.get(
+                    (
+                        current_month,
+                        category,
+                    ),
+                    0.0,
+                )
+            )
+
+            comparison_expenses = float(
+                category_totals.get(
+                    (
+                        comparison_month,
+                        category,
+                    ),
+                    0.0,
+                )
+            )
+
+            if (
+                current_expenses == 0
+                and comparison_expenses == 0
+            ):
+                continue
+
+            expense_change = (
+                current_expenses
+                - comparison_expenses
+            )
+
+            comparisons.append(
+                {
+                    "Month": str(
+                        current_month
+                    ),
+                    "Comparison Month": str(
+                        comparison_month
+                    ),
+                    "Category": category,
+                    "Current Expenses": round(
+                        current_expenses,
+                        2,
+                    ),
+                    "Comparison Expenses": round(
+                        comparison_expenses,
+                        2,
+                    ),
+                    "Expense Change": round(
+                        expense_change,
+                        2,
+                    ),
+                    "Expense Change %": (
+                        calculate_percentage_change(
+                            current_expenses,
+                            comparison_expenses,
+                        )
+                    ),
+                }
+            )
+
+    if not comparisons:
+        return pd.DataFrame(
+            columns=output_columns
+        )
+
+    category_comparisons = pd.DataFrame(
+        comparisons,
+        columns=output_columns,
+    )
+
+    category_comparisons[
+        "_absolute_change"
+    ] = category_comparisons[
+        "Expense Change"
+    ].abs()
+
+    category_comparisons = (
+        category_comparisons
+        .sort_values(
+            [
+                "Month",
+                "_absolute_change",
+                "Category",
+            ],
+            ascending=[
+                True,
+                False,
+                True,
+            ],
+        )
+        .drop(columns="_absolute_change")
+        .reset_index(drop=True)
+    )
+
+    return category_comparisons
 
 def build_tax_summary(df: pd.DataFrame) -> pd.DataFrame:
     """Summarize expense transactions by official Schedule C Part II line."""
@@ -2990,6 +3653,9 @@ def export_pdf_report(
     transactions: pd.DataFrame,
     metrics: BusinessMetrics,
     monthly_summary: pd.DataFrame,
+    monthly_comparisons: pd.DataFrame,
+    category_comparisons: pd.DataFrame,
+    duplicate_transactions: pd.DataFrame,
     tax_summary: pd.DataFrame,
     saas_audit: pd.DataFrame,
     anomalies: pd.DataFrame,
@@ -3633,6 +4299,328 @@ def export_pdf_report(
         story.append(tax_table)
 
         # -------------------------------------------------
+        # PHASE 1 - MONTHLY HISTORICAL COMPARISONS
+        # -------------------------------------------------
+
+        story.append(PageBreak())
+
+        story.append(
+            Paragraph(
+                "Monthly Historical Comparisons",
+                styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                (
+                    "Each available month is compared with the most recent "
+                    "earlier month. Positive changes represent increases and "
+                    "negative changes represent decreases."
+                ),
+                styles["BodyCustom"],
+            )
+        )
+
+        if monthly_comparisons.empty:
+            story.append(
+                Paragraph(
+                    "At least two valid months are required for monthly comparisons.",
+                    styles["BodyCustom"],
+                )
+            )
+        else:
+            monthly_comparison_rows = [
+                [
+                    "Month",
+                    "Compared With",
+                    "Revenue Change",
+                    "Revenue %",
+                    "Expense Change",
+                    "Expense %",
+                    "Net Cash Change",
+                    "Net Cash %",
+                ]
+            ]
+
+            for _, row in monthly_comparisons.iterrows():
+                revenue_change_percentage = row["Revenue Change %"]
+                expense_change_percentage = row["Expense Change %"]
+                net_cash_change_percentage = row[
+                    "Net Operating Cash Change %"
+                ]
+
+                monthly_comparison_rows.append(
+                    [
+                        str(row["Month"]),
+                        str(row["Comparison Month"]),
+                        f"${float(row['Revenue Change']):,.2f}",
+                        (
+                            "N/A"
+                            if pd.isna(revenue_change_percentage)
+                            else f"{float(revenue_change_percentage):.1%}"
+                        ),
+                        f"${float(row['Expense Change']):,.2f}",
+                        (
+                            "N/A"
+                            if pd.isna(expense_change_percentage)
+                            else f"{float(expense_change_percentage):.1%}"
+                        ),
+                        f"${float(row['Net Operating Cash Change']):,.2f}",
+                        (
+                            "N/A"
+                            if pd.isna(net_cash_change_percentage)
+                            else f"{float(net_cash_change_percentage):.1%}"
+                        ),
+                    ]
+                )
+
+            monthly_comparison_table = Table(
+                monthly_comparison_rows,
+                colWidths=[
+                    0.70 * inch,
+                    0.80 * inch,
+                    1.00 * inch,
+                    0.65 * inch,
+                    1.00 * inch,
+                    0.65 * inch,
+                    1.00 * inch,
+                    0.65 * inch,
+                ],
+                repeatRows=1,
+            )
+
+            monthly_comparison_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#17365D")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 6.8),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D5DCE3")),
+                        (
+                            "ROWBACKGROUNDS",
+                            (0, 1),
+                            (-1, -1),
+                            [colors.white, colors.HexColor("#F8FAFC")],
+                        ),
+                    ]
+                )
+            )
+
+            story.append(monthly_comparison_table)
+
+        # -------------------------------------------------
+        # PHASE 1 - EXPENSE CATEGORY COMPARISONS
+        # -------------------------------------------------
+
+        story.append(PageBreak())
+
+        story.append(
+            Paragraph(
+                "Expense Category Comparisons",
+                styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                (
+                    "Schedule C category spending is compared with the most "
+                    "recent earlier month. A missing category in either month "
+                    "is treated as zero spending."
+                ),
+                styles["BodyCustom"],
+            )
+        )
+
+        if category_comparisons.empty:
+            story.append(
+                Paragraph(
+                    "No expense category comparisons were available.",
+                    styles["BodyCustom"],
+                )
+            )
+        else:
+            category_comparison_rows = [
+                [
+                    "Month",
+                    "Compared With",
+                    "Category",
+                    "Current",
+                    "Previous",
+                    "Change",
+                    "Change %",
+                ]
+            ]
+
+            for _, row in category_comparisons.iterrows():
+                expense_change_percentage = row["Expense Change %"]
+
+                category_comparison_rows.append(
+                    [
+                        str(row["Month"]),
+                        str(row["Comparison Month"]),
+                        Paragraph(
+                            escape(str(row["Category"])),
+                            styles["BodyCustom"],
+                        ),
+                        f"${float(row['Current Expenses']):,.2f}",
+                        f"${float(row['Comparison Expenses']):,.2f}",
+                        f"${float(row['Expense Change']):,.2f}",
+                        (
+                            "N/A"
+                            if pd.isna(expense_change_percentage)
+                            else f"{float(expense_change_percentage):.1%}"
+                        ),
+                    ]
+                )
+
+            category_comparison_table = Table(
+                category_comparison_rows,
+                colWidths=[
+                    0.70 * inch,
+                    0.80 * inch,
+                    2.40 * inch,
+                    0.85 * inch,
+                    0.85 * inch,
+                    0.85 * inch,
+                    0.70 * inch,
+                ],
+                repeatRows=1,
+            )
+
+            category_comparison_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#17365D")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 6.6),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D5DCE3")),
+                        (
+                            "ROWBACKGROUNDS",
+                            (0, 1),
+                            (-1, -1),
+                            [colors.white, colors.HexColor("#F8FAFC")],
+                        ),
+                    ]
+                )
+            )
+
+            story.append(category_comparison_table)
+
+        # -------------------------------------------------
+        # PHASE 1 - POSSIBLE DUPLICATE TRANSACTIONS
+        # -------------------------------------------------
+
+        story.append(PageBreak())
+
+        story.append(
+            Paragraph(
+                "Possible Duplicate Transactions",
+                styles["SectionHeading"],
+            )
+        )
+
+        story.append(
+            Paragraph(
+                (
+                    "These are review findings, not confirmed duplicates. "
+                    "Each group contains expense transactions with the same "
+                    "date, normalized merchant, and amount."
+                ),
+                styles["BodyCustom"],
+            )
+        )
+
+        if duplicate_transactions.empty:
+            story.append(
+                Paragraph(
+                    "No possible duplicate expense groups were detected.",
+                    styles["BodyCustom"],
+                )
+            )
+        else:
+            duplicate_rows = [
+                [
+                    "Date",
+                    "Merchant",
+                    "Amount",
+                    "Count",
+                    "Possible Duplicate",
+                    "Transaction IDs",
+                    "Severity",
+                ]
+            ]
+
+            for _, row in duplicate_transactions.iterrows():
+                date_value = row["Date"]
+                formatted_date = (
+                    date_value.strftime("%Y-%m-%d")
+                    if hasattr(date_value, "strftime")
+                    else str(date_value)
+                )
+
+                duplicate_rows.append(
+                    [
+                        formatted_date,
+                        Paragraph(
+                            escape(str(row["Merchant"])),
+                            styles["BodyCustom"],
+                        ),
+                        f"${float(row['Amount']):,.2f}",
+                        str(row["Charge Count"]),
+                        f"${float(row['Potential Duplicate Amount']):,.2f}",
+                        Paragraph(
+                            escape(str(row["Transaction IDs"])),
+                            styles["BodyCustom"],
+                        ),
+                        str(row["Severity"]),
+                    ]
+                )
+
+            duplicate_table = Table(
+                duplicate_rows,
+                colWidths=[
+                    0.75 * inch,
+                    1.50 * inch,
+                    0.75 * inch,
+                    0.55 * inch,
+                    1.05 * inch,
+                    1.45 * inch,
+                    0.70 * inch,
+                ],
+                repeatRows=1,
+            )
+
+            duplicate_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#17365D")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 6.8),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D5DCE3")),
+                        (
+                            "ROWBACKGROUNDS",
+                            (0, 1),
+                            (-1, -1),
+                            [colors.white, colors.HexColor("#F8FAFC")],
+                        ),
+                    ]
+                )
+            )
+
+            story.append(duplicate_table)
+
+        # -------------------------------------------------
         # SAAS LEAK REVIEW
         # -------------------------------------------------
 
@@ -4189,7 +5177,31 @@ def main() -> None:
         )
 
         progress.set(
-            66,
+            63,
+            "Comparing financial trends",
+            "Reviewing monthly and category changes",
+        )
+
+        monthly_comparisons = build_monthly_comparisons(
+            monthly
+        )
+
+        category_comparisons = build_category_comparisons(
+            analyzed
+        )
+
+        progress.set(
+            68,
+            "Checking duplicates",
+            "Looking for matching expense transactions",
+        )
+
+        duplicate_transactions = detect_duplicate_transactions(
+            analyzed
+        )
+
+        progress.set(
+            72,
             "Building tax summary",
             "Grouping expenses into Schedule C categories",
         )
@@ -4199,9 +5211,12 @@ def main() -> None:
         )
 
         progress.set(
-            72,
+            76,
             "Reviewing SaaS",
-            "Checking duplicates, overlapping tools, and zombie subscriptions",
+            (
+                "Checking duplicate, overlapping, "
+                "and recurring software costs"
+            ),
         )
 
         saas_audit = build_saas_audit(
@@ -4209,7 +5224,7 @@ def main() -> None:
         )
 
         progress.set(
-            77,
+            80,
             "Scanning anomalies",
             "Checking recurring charges and unusual increases",
         )
@@ -4219,7 +5234,7 @@ def main() -> None:
         )
 
         progress.set(
-            82,
+            84,
             "Generating CFO summary",
             "Preparing business-health analysis",
         )
@@ -4256,7 +5271,10 @@ def main() -> None:
         progress.set(
             91,
             "Building PDF report",
-            "Creating CFO charts, tax summary, SaaS review, and transaction appendix",
+            (
+                "Creating CFO charts, tax summary, "
+                "SaaS review, and transaction appendix"
+            ),
         )
 
         export_pdf_report(
@@ -4264,6 +5282,9 @@ def main() -> None:
             analyzed,
             metrics,
             monthly,
+            monthly_comparisons,
+            category_comparisons,
+            duplicate_transactions,
             tax_summary,
             saas_audit,
             anomalies,
@@ -4282,33 +5303,57 @@ def main() -> None:
         print("=" * 72)
         print("BUSINESS FINANCIAL REPORT COMPLETE")
         print("=" * 72)
+
         print(
-            f"Revenue:            "
+            f"Revenue:                    "
             f"${metrics.revenue:,.2f}"
         )
+
         print(
-            f"Expenses:           "
+            f"Expenses:                   "
             f"${metrics.expenses:,.2f}"
         )
+
         print(
-            f"Net operating cash: "
+            f"Net operating cash:         "
             f"${metrics.net_operating_cash:,.2f}"
         )
 
         if metrics.overhead_ratio is not None:
             print(
-                f"Overhead / revenue: "
+                f"Overhead / revenue:          "
                 f"{metrics.overhead_ratio:.1%}"
             )
         else:
             print(
-                "Overhead / revenue: N/A"
+                "Overhead / revenue:          N/A"
             )
 
         print(
-            f"PDF report:         "
+            f"Monthly comparisons:         "
+            f"{len(monthly_comparisons):,}"
+        )
+
+        print(
+            f"Category comparisons:        "
+            f"{len(category_comparisons):,}"
+        )
+
+        print(
+            f"Possible duplicate groups:   "
+            f"{len(duplicate_transactions):,}"
+        )
+
+        print(
+            f"Anomaly findings:            "
+            f"{len(anomalies):,}"
+        )
+
+        print(
+            f"PDF report:                  "
             f"{export_path}"
         )
+
         print("=" * 72)
 
     except Exception as error:
