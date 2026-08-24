@@ -499,8 +499,12 @@ export function format_markdown(
 
   let confirmed_defect_value: string;
 
-  if (human_review.confirmedDefect) {
-    confirmed_defect_value = human_review.confirmedDefect;
+  if (
+    human_review.confirmedDefect
+    && human_review.confirmedDefect.trim().length > 0
+  ) {
+    confirmed_defect_value =
+      human_review.confirmedDefect.trim();
   } else {
     confirmed_defect_value = "Pending";
   }
