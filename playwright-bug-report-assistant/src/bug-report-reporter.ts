@@ -1,8 +1,9 @@
 import { join } from "node:path";
 import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
-import { build_report_data, collect_environment, collect_failure_details, find_evidence, save_bug_report } from "./bug-report-generator";
+import { build_report_data, collect_environment, collect_failure_details, find_evidence } from "./bug-report-generator";
 import { append_history, read_history } from "./history";
 import type { FailedTest, ReportMode } from "./types";
+import { report_formats_from_env, save_report_bundle } from "./report-bundle";
 
 export default class BugReportReporter implements Reporter {
   async onTestEnd(test: TestCase, result: TestResult): Promise<void> {
@@ -19,9 +20,10 @@ export default class BugReportReporter implements Reporter {
       const failure = { test, result } satisfies FailedTest;
       const history = await read_history(historyPath);
       const data = build_report_data(collect_failure_details(failure), find_evidence(result), collect_environment(failure), mode, history);
-      const path = await save_bug_report(failure, join(process.cwd(), "test-results", "bug-reports"), "markdown", mode, history);
+      const reports = await save_report_bundle(data, join(process.cwd(), "test-results", "bug-reports"), report_formats_from_env());
       await append_history(historyPath, { ...historyRecord, fingerprint: data.fingerprint });
-      console.log(`Bug report saved: ${path}`);
+      for (const [format, path] of Object.entries({ Markdown: reports.markdown, HTML: reports.html, PDF: reports.pdf })) if (path) console.log(`${format} bug report: ${path}`);
+      if (reports.pdfError) console.error(`PDF bug report unavailable: ${reports.pdfError}`);
     } catch (error) { console.error(`Unable to save bug report: ${error instanceof Error ? error.message : String(error)}`); }
   }
 }

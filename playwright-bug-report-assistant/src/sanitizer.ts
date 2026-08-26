@@ -21,6 +21,7 @@ export function sanitize_string(value: string, options: SanitizerOptions = {}): 
 export function sanitize<T>(value: T, options: SanitizerOptions = {}, seen = new WeakSet<object>()): T {
   if (typeof value === "string") return sanitize_string(value, options) as T;
   if (value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return new Date(value.getTime()) as T;
   if (seen.has(value)) return "[CIRCULAR]" as T;
   seen.add(value);
   if (Array.isArray(value)) return value.map(item => sanitize(item, options, seen)) as T;

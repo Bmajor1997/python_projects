@@ -58,7 +58,14 @@ export function build_report_data(details: FailureDetails, evidence: EvidenceFil
     fingerprint, stability: analyze_stability(history.filter(x => x.testTitle === details.testTitle)), aiAnalysis: null, mode };
 }
 export function normalize_report_data(data: BugReportData): BugReportData {
-  const clean = sanitize(data);
+  const trim = (value: unknown): unknown => {
+    if (typeof value === "string") { const text = value.trim(); return text || null; }
+    if (value instanceof Date) return new Date(value.getTime());
+    if (Array.isArray(value)) return value.map(trim).filter(item => item !== null);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, trim(item)]));
+    return value;
+  };
+  const clean = sanitize(trim(structuredClone(data))) as BugReportData;
   if (clean.mode === "customer-safe") {
     clean.details.testFile = "[INTERNAL PATH OMITTED]";
     clean.details.stackTrace = null;
@@ -74,7 +81,7 @@ export function normalize_report_data(data: BugReportData): BugReportData {
   return clean;
 }
 const show = (value: unknown) => value === null || value === undefined || value === "" ? "Unavailable" : String(value);
-const links = (paths: string[]) => paths.length ? paths.map(p => `- [${escape_markdown(relative(process.cwd(), p))}](${p.replace(/\\/g, "/")})`).join("\n") : "- None captured";
+const links = (paths: string[]) => paths.length ? paths.map(p => `- [${escape_markdown(relative(process.cwd(), p) || p)}](${p.replace(/\\/g, "/")})`).join("\n") : "- None captured";
 export function format_markdown(input: BugReportData): string {
   const data = normalize_report_data(input), { details: d, evidence: e, environment: n } = data;
   const lines = [`# ${escape_markdown(data.aiAnalysis?.title ?? `Bug: ${d.testTitle}`)}`, "", `> ${data.automatedWarning}`, "", "## Summary", "",
@@ -84,7 +91,7 @@ export function format_markdown(input: BugReportData): string {
     "", "### Steps", "", ...(d.testSteps.length ? d.testSteps.map((s, i) => `${i + 1}. ${escape_markdown(s)}`) : ["Unavailable"]), "", "## Environment", "",
     `- **Browser/project:** ${n.browserName} / ${n.projectName}`, `- **Viewport:** ${n.viewport ? `${n.viewport.width}×${n.viewport.height}` : "Unavailable"}`, `- **OS:** ${n.operatingSystem} ${n.systemRelease}`,
     `- **Locale/timezone:** ${show(n.locale)} / ${show(n.timezone)}`, `- **Commit/branch:** ${show(n.commitSha)} / ${show(n.branch)}`, `- **CI run:** ${show(n.ciRunUrl)}`, "", "## Evidence", "",
-    "### Screenshots", links(e.screenshotPaths), "", "### Traces", links(e.tracePaths), "", "### Videos", links(e.videoPaths)];
+    "### Screenshots", links(e.screenshotPaths), "", "### Traces", links(e.tracePaths), "", "### Videos", links(e.videoPaths), "", "### Other attachments", links(e.otherAttachments)];
   if (data.mode === "developer") lines.push("", "### Diagnostics", "", `**Console:** ${e.consoleMessages.length ? e.consoleMessages.map(escape_markdown).join("; ") : "None captured"}`, "", `**Page errors:** ${e.pageErrors.length ? e.pageErrors.map(escape_markdown).join("; ") : "None captured"}`, "", `**Network failures:** ${e.networkFailures.length ? e.networkFailures.map(x => `${x.method} ${x.status ?? "failed"} ${x.url}`).join("; ") : "None captured"}`, "", "### Stack trace", "", "```text", d.stackTrace ?? "Unavailable", "```");
   if (data.aiAnalysis) lines.push("", "## AI suggestions — human review required", "", data.aiAnalysis.summary, "", `- **Likely cause:** ${data.aiAnalysis.likelyCause}`, `- **Confidence:** ${Math.round(data.aiAnalysis.confidence * 100)}%`, "- **Assumptions:**", ...data.aiAnalysis.assumptions.map(x => `  - ${x}`));
   lines.push("", "## Stability evidence", "", ...(data.stability.observations.length ? data.stability.observations.map(x => `- ${x}`) : ["- Insufficient observations for a specific finding."]), "", "## Human review", "", "- Confirmed defect: Pending", "- Severity: Pending", "- Priority: Pending", "- Final title: Pending", "- Ticket URL: Pending");

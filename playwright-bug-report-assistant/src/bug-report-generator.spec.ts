@@ -21,12 +21,14 @@ function create_report_data(): ReportData {
         "   ",
         "Submit payment",
       ],
+      expectedBehavior: null, actualBehavior: null, failedStep: null, tags: [],
     },
     evidence: {
       screenshotPaths: ["  test-results/failure.png  ", ""],
       tracePaths: ["  test-results/trace.zip  ", "   "],
       videoPaths: ["  test-results/video.webm  "],
       otherAttachments: ["  test-results/network.txt  ", ""],
+      currentUrl: null, consoleMessages: [], pageErrors: [], networkFailures: [], accessibilitySnapshot: null, domSnippet: null,
     },
     environment: {
       operatingSystem: "  Windows  ",
@@ -34,6 +36,7 @@ function create_report_data(): ReportData {
       projectName: "  chromium  ",
       browserName: "  chromium  ",
       executionTime: new Date("2026-08-24T14:00:00.000Z"),
+      browserVersion: null, viewport: null, locale: null, timezone: null, commitSha: null, branch: null, ciRunUrl: null, ciProvider: null, safeEnvironment: {},
     },
     humanReview: {
       confirmedDefect: "  Yes  ",
@@ -45,6 +48,10 @@ function create_report_data(): ReportData {
     },
     generatedAt: new Date("2026-08-24T14:01:00.000Z"),
     automatedWarning: "  Requires human review.  ",
+    fingerprint: "abcdef1234567890",
+    stability: { classification: "insufficient history", observations: [], sampleSize: 0, failureRate: null, recentTrend: "unknown", consecutivePasses: 0, consecutiveFailures: 0 },
+    aiAnalysis: null,
+    mode: "developer",
   };
 }
 
