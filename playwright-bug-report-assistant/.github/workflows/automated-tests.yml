@@ -1,0 +1,42 @@
+name: Automated Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Run tests
+        run: npm test
+        env:
+          CI: "true"
+          BUG_REPORT_MODE: developer
+      - name: Upload Playwright evidence and bug reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-bug-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
