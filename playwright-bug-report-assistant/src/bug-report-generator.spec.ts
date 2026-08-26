@@ -26,7 +26,6 @@ function create_report_data(): ReportData {
     evidence: {
       screenshotPaths: ["  test-results/failure.png  ", ""],
       tracePaths: ["  test-results/trace.zip  ", "   "],
-      videoPaths: ["  test-results/video.webm  "],
       otherAttachments: ["  test-results/network.txt  ", ""],
       currentUrl: null, consoleMessages: [], pageErrors: [], networkFailures: [], accessibilitySnapshot: null, domSnippet: null,
     },
@@ -90,9 +89,6 @@ test.describe("normalize_report_data", () => {
     ]);
     expect(normalized.evidence.tracePaths).toEqual([
       "test-results/trace.zip",
-    ]);
-    expect(normalized.evidence.videoPaths).toEqual([
-      "test-results/video.webm",
     ]);
     expect(normalized.evidence.otherAttachments).toEqual([
       "test-results/network.txt",

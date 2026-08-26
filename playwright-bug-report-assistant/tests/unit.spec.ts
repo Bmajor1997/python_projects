@@ -5,6 +5,9 @@ import { analyze_stability } from "../src/stability";
 import type { HistoryRecord } from "../src/types";
 import { run_ai_analysis } from "../src/ai-analysis";
 import { GitHubIssuePublisher } from "../src/publisher";
+import { expectation_values, friendly_failure_message, friendly_report_title } from "../src/text-utils";
+import { load_manual_scenarios } from "../src/manual-scenarios";
+import { writeFile } from "node:fs/promises";
 
 test("recursively redacts secrets and sensitive URL values", () => {
   const value = sanitize({ Authorization: "Bearer top-secret-token", nested: { password: "hunter2", url: "https://example.test/?token=abc&view=ok" } });
@@ -13,6 +16,13 @@ test("recursively redacts secrets and sensitive URL values", () => {
 test("redacts token-shaped text and only exposes allowlisted environment values", () => {
   expect(sanitize_string("Bearer abcdefghijklmnop")).toBe("[REDACTED]");
   expect(safe_environment({ SAFE: "yes", SECRET: "no" }, ["SAFE"])).toEqual({ SAFE: "yes" });
+});
+test("keeps ordinary error text readable instead of URL-encoding it", () => {
+  const error = 'Error: failed\nExpected: "Payment approved"\nReceived: "Payment declined"';
+  expect(sanitize_string(error)).toBe(error);
+  expect(expectation_values(error)).toEqual({ expected: "Payment approved", received: "Payment declined" });
+  expect(friendly_failure_message(error)).toBe('Expected the page to say "Payment approved", but it said "Payment declined".');
+  expect(friendly_report_title(error, "technical > name")).toBe('Problem: "Payment declined" appeared instead of "Payment approved"');
 });
 test("normalizes volatile identifiers and line numbers", () => {
   expect(normalize_failure_text("Failure 12345678901 at C:\\x.ts:42:8")).toBe("failure <number> at c:/x.ts:<line>");
@@ -32,4 +42,10 @@ test("AI analysis is optional and falls back on provider failure", async () => {
 test("publishing dry-run performs no external request", async () => {
   const publisher = new GitHubIssuePublisher("owner", "repo", "secret-token");
   expect(await publisher.publish({ title: "Bug", body: "Preview", fingerprint: "abc" }, true)).toBeNull();
+});
+
+test("curated scenarios reject files outside the configured project", async ({}, testInfo) => {
+  const config = testInfo.outputPath("manual-scenarios.json");
+  await writeFile(config, JSON.stringify({ scenarios: [{ id: "unsafe", name: "Unsafe", description: "Unsafe", testFile: "../outside.spec.ts", testName: "test", project: "chromium" }] }));
+  await expect(load_manual_scenarios(testInfo.outputDir, config)).rejects.toThrow("outside the project");
 });

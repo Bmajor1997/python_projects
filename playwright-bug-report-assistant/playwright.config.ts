@@ -8,7 +8,7 @@ export default defineConfig({
   use: {
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
+    video: "off",
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
 });

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self'; script-src 'self'">
+  <title>Playwright Bug Report Assistant</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar"><div><p class="eyebrow">Manual testing workspace</p><h1>Bug Report Assistant</h1></div><span class="jira-badge">Jira project: SCRUM</span></header>
+  <main>
+    <section class="panel scenario-panel">
+      <div class="section-heading"><div><p class="step">Step 1</p><h2>Choose an approved scenario</h2></div><span id="run-status" class="status idle">Ready</span></div>
+      <label for="scenario">Test scenario</label>
+      <select id="scenario"><option>Loading approved scenarios…</option></select>
+      <p id="scenario-description" class="supporting"></p>
+      <button id="run" class="primary">Run selected test</button>
+      <details><summary>Run details</summary><pre id="run-output">No test has run yet.</pre></details>
+    </section>
+
+    <section id="report-panel" class="panel hidden">
+      <div class="section-heading"><div><p class="step">Step 2</p><h2>Review what happened</h2></div><button id="open-folder" class="secondary">Open report folder</button></div>
+      <div id="summary" class="summary-grid"></div>
+      <div class="comparison"><article><span>Expected</span><p id="expected"></p></article><article><span>Actual</span><p id="actual"></p></article></div>
+      <h3>Evidence and reports</h3><div id="report-links" class="button-row"></div>
+    </section>
+
+    <section id="review-panel" class="panel hidden">
+      <div class="section-heading"><div><p class="step">Step 3</p><h2>Complete the human review</h2></div><span class="supporting">Blank fields appear as “Pending Review” in reports.</span></div>
+      <form id="review-form">
+        <div class="form-grid">
+          <label>Confirmed defect<select name="confirmedDefect"><option value="">Pending Review</option><option>Yes</option><option>No</option><option>Needs investigation</option></select></label>
+          <label>Severity<select name="severity"><option value="">Pending Review</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select></label>
+          <label>Priority<select name="priority"><option value="">Pending Review</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></label>
+          <label>Final title<input name="finalTitle" maxlength="300" placeholder="Pending Review"></label>
+          <label class="wide">Reviewer notes<textarea name="notes" maxlength="10000" rows="4" placeholder="Pending Review"></textarea></label>
+          <label class="wide">Existing ticket URL<input name="ticketUrl" maxlength="2000" placeholder="Pending Review"></label>
+        </div>
+        <div class="button-row"><button class="primary" type="submit">Save review and regenerate reports</button><span id="save-status" class="supporting"></span></div>
+      </form>
+    </section>
+
+    <section id="jira-panel" class="panel hidden">
+      <div class="section-heading"><div><p class="step">Step 4</p><h2>Preview the Jira Bug</h2></div><span class="status waiting">OAuth not connected</span></div>
+      <div class="jira-meta"><span>Project <strong>SCRUM</strong></span><span>Issue type <strong>Bug</strong></span><span>Screenshots <strong id="screenshot-count">0</strong></span></div>
+      <label>Summary<input id="jira-summary" readonly></label>
+      <label>Description<textarea id="jira-description" rows="12" readonly></textarea></label>
+      <p class="notice">Publishing is intentionally unavailable in this phase. Jira OAuth will be added after the desktop workflow is approved.</p>
+      <button disabled>Connect and publish to Jira</button>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

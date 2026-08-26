@@ -3,7 +3,7 @@ import { platform, release } from "node:os";
 import { join, relative } from "node:path";
 import type { TestResult } from "@playwright/test/reporter";
 import { make_filename, save_file } from "./file-utils";
-import { clean_error_text, escape_markdown } from "./text-utils";
+import { clean_error_text, escape_markdown, expectation_values, friendly_failure_message, friendly_report_title, friendly_test_name } from "./text-utils";
 import { sanitize, safe_environment } from "./sanitizer";
 import { categorize_failure, create_fingerprint } from "./fingerprint";
 import { analyze_stability } from "./stability";
@@ -17,9 +17,11 @@ export function get_test_steps(result: TestResult): string[] {
 export function collect_failure_details({ test, result }: FailedTest): FailureDetails {
   const primary = result.errors[0];
   const steps = get_test_steps(result);
+  const rawError = clean_error_text(primary?.message ?? "The test failed without an error message.");
+  const comparison = expectation_values(rawError);
   return { testTitle: test.titlePath().join(" > "), testFile: test.location.file, lineNumber: test.location.line, columnNumber: test.location.column,
-    status: result.status, errorMessage: clean_error_text(primary?.message ?? "The test failed without an error message."), stackTrace: primary?.stack ? clean_error_text(primary.stack) : null,
-    startTime: result.startTime, durationMs: result.duration, retryNumber: result.retry, testSteps: steps, expectedBehavior: null, actualBehavior: primary?.message ? clean_error_text(primary.message) : null,
+    status: result.status, errorMessage: friendly_failure_message(rawError), stackTrace: primary?.stack ? clean_error_text(primary.stack) : null,
+    startTime: result.startTime, durationMs: result.duration, retryNumber: result.retry, testSteps: steps, expectedBehavior: comparison?.expected ?? null, actualBehavior: comparison?.received ?? null,
     failedStep: steps.at(-1) ?? null, tags: test.tags ?? [] };
 }
 function parse_json_attachment(result: TestResult, name: string): unknown | null {
@@ -28,17 +30,17 @@ function parse_json_attachment(result: TestResult, name: string): unknown | null
   try { return JSON.parse(attachment.body.toString("utf8")); } catch { return null; }
 }
 export function find_evidence(result: TestResult): EvidenceFiles {
-  const evidence: EvidenceFiles = { screenshotPaths: [], tracePaths: [], videoPaths: [], otherAttachments: [], currentUrl: null, consoleMessages: [], pageErrors: [], networkFailures: [], accessibilitySnapshot: null, domSnippet: null };
+  const evidence: EvidenceFiles = { screenshotPaths: [], tracePaths: [], otherAttachments: [], currentUrl: null, consoleMessages: [], pageErrors: [], networkFailures: [], accessibilitySnapshot: null, domSnippet: null };
   for (const attachment of result.attachments) {
     if (!attachment.path || !existsSync(attachment.path)) continue;
     const name = attachment.name.toLowerCase(), type = attachment.contentType.toLowerCase();
     if (type.startsWith("image/") || name.includes("screenshot")) evidence.screenshotPaths.push(attachment.path);
     else if (name.includes("trace")) evidence.tracePaths.push(attachment.path);
-    else if (type.startsWith("video/") || name.includes("video")) evidence.videoPaths.push(attachment.path);
+    else if (type.startsWith("video/") || name.includes("video")) continue;
     else evidence.otherAttachments.push(attachment.path);
   }
   const context = parse_json_attachment(result, "bug-report-context") as Partial<EvidenceFiles> | null;
-  return sanitize({ ...evidence, ...(context ?? {}), screenshotPaths: evidence.screenshotPaths, tracePaths: evidence.tracePaths, videoPaths: evidence.videoPaths, otherAttachments: evidence.otherAttachments });
+  return sanitize({ ...evidence, ...(context ?? {}), screenshotPaths: evidence.screenshotPaths, tracePaths: evidence.tracePaths, otherAttachments: evidence.otherAttachments });
 }
 export function collect_environment({ test, result }: FailedTest): EnvironmentDetails {
   const project = test.parent.project();
@@ -81,20 +83,27 @@ export function normalize_report_data(data: BugReportData): BugReportData {
   return clean;
 }
 const show = (value: unknown) => value === null || value === undefined || value === "" ? "Unavailable" : String(value);
+const review_value = (value: string | null): string => value ?? "Pending Review";
 const links = (paths: string[]) => paths.length ? paths.map(p => `- [${escape_markdown(relative(process.cwd(), p) || p)}](${p.replace(/\\/g, "/")})`).join("\n") : "- None captured";
 export function format_markdown(input: BugReportData): string {
   const data = normalize_report_data(input), { details: d, evidence: e, environment: n } = data;
-  const lines = [`# ${escape_markdown(data.aiAnalysis?.title ?? `Bug: ${d.testTitle}`)}`, "", `> ${data.automatedWarning}`, "", "## Summary", "",
+  const lines = [`# ${escape_markdown(data.aiAnalysis?.title ?? friendly_report_title(d.errorMessage, d.testTitle, d.expectedBehavior, d.actualBehavior))}`, "", `> ${data.automatedWarning}`, "", "## Summary", "",
     `- **Status:** ${d.status}`, `- **Category:** ${categorize_failure(d.errorMessage)}`, `- **Fingerprint:** \`${data.fingerprint}\``, `- **Stability:** ${data.stability.classification} (${data.stability.sampleSize} samples)`,
-    `- **Error:** ${escape_markdown(d.errorMessage)}`, "", "## Reproduction", "", `- **Test:** ${escape_markdown(d.testTitle)}`, `- **Failed step:** ${show(d.failedStep)}`,
+    `- **What went wrong:** ${escape_markdown(d.errorMessage)}`, "", "## Reproduction", "", `- **Test:** ${escape_markdown(friendly_test_name(d.testTitle))}`, `- **Failed step:** ${show(d.failedStep)}`,
     `- **Expected:** ${show(d.expectedBehavior)}`, `- **Actual:** ${show(d.actualBehavior)}`, `- **URL:** ${show(e.currentUrl)}`, `- **Retry:** ${d.retryNumber}`,
     "", "### Steps", "", ...(d.testSteps.length ? d.testSteps.map((s, i) => `${i + 1}. ${escape_markdown(s)}`) : ["Unavailable"]), "", "## Environment", "",
     `- **Browser/project:** ${n.browserName} / ${n.projectName}`, `- **Viewport:** ${n.viewport ? `${n.viewport.width}×${n.viewport.height}` : "Unavailable"}`, `- **OS:** ${n.operatingSystem} ${n.systemRelease}`,
     `- **Locale/timezone:** ${show(n.locale)} / ${show(n.timezone)}`, `- **Commit/branch:** ${show(n.commitSha)} / ${show(n.branch)}`, `- **CI run:** ${show(n.ciRunUrl)}`, "", "## Evidence", "",
-    "### Screenshots", links(e.screenshotPaths), "", "### Traces", links(e.tracePaths), "", "### Videos", links(e.videoPaths), "", "### Other attachments", links(e.otherAttachments)];
+    "### Screenshots", links(e.screenshotPaths), "", "### Traces", links(e.tracePaths), "", "### Other attachments", links(e.otherAttachments)];
   if (data.mode === "developer") lines.push("", "### Diagnostics", "", `**Console:** ${e.consoleMessages.length ? e.consoleMessages.map(escape_markdown).join("; ") : "None captured"}`, "", `**Page errors:** ${e.pageErrors.length ? e.pageErrors.map(escape_markdown).join("; ") : "None captured"}`, "", `**Network failures:** ${e.networkFailures.length ? e.networkFailures.map(x => `${x.method} ${x.status ?? "failed"} ${x.url}`).join("; ") : "None captured"}`, "", "### Stack trace", "", "```text", d.stackTrace ?? "Unavailable", "```");
   if (data.aiAnalysis) lines.push("", "## AI suggestions — human review required", "", data.aiAnalysis.summary, "", `- **Likely cause:** ${data.aiAnalysis.likelyCause}`, `- **Confidence:** ${Math.round(data.aiAnalysis.confidence * 100)}%`, "- **Assumptions:**", ...data.aiAnalysis.assumptions.map(x => `  - ${x}`));
-  lines.push("", "## Stability evidence", "", ...(data.stability.observations.length ? data.stability.observations.map(x => `- ${x}`) : ["- Insufficient observations for a specific finding."]), "", "## Human review", "", "- Confirmed defect: Pending", "- Severity: Pending", "- Priority: Pending", "- Final title: Pending", "- Ticket URL: Pending");
+  lines.push("", "## Stability evidence", "", ...(data.stability.observations.length ? data.stability.observations.map(x => `- ${x}`) : ["- Insufficient observations for a specific finding."]), "", "## Human review", "",
+    `- Confirmed defect: ${escape_markdown(review_value(data.humanReview.confirmedDefect))}`,
+    `- Severity: ${escape_markdown(review_value(data.humanReview.severity))}`,
+    `- Priority: ${escape_markdown(review_value(data.humanReview.priority))}`,
+    `- Final title: ${escape_markdown(review_value(data.humanReview.finalTitle))}`,
+    `- Notes: ${escape_markdown(review_value(data.humanReview.notes))}`,
+    `- Ticket URL: ${escape_markdown(review_value(data.humanReview.ticketUrl))}`);
   return lines.join("\n");
 }
 export function format_json(data: BugReportData): string { return JSON.stringify(normalize_report_data(data), null, 2); }

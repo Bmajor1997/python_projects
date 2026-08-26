@@ -10,6 +10,7 @@ export function sanitize_string(value: string, options: SanitizerOptions = {}): 
   let clean = value;
   for (const pattern of [...TOKEN_PATTERNS, ...(options.customPatterns ?? [])]) clean = clean.replace(pattern, REDACTED);
   try {
+    if (!/^https?:\/\//i.test(clean)) throw new Error("Not an HTTP URL");
     const url = new URL(clean);
     for (const key of [...url.searchParams.keys()]) if ((options.sensitiveKeys ?? DEFAULT_KEYS).test(key)) url.searchParams.set(key, REDACTED);
     clean = url.toString();

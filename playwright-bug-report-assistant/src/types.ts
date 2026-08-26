@@ -1,8 +1,8 @@
 import type { TestCase, TestResult } from "@playwright/test/reporter";
 
 export type ReportMode = "developer" | "product" | "customer-safe";
-export type ReportFormat = "markdown" | "html" | "pdf";
-export type ReportFormatOptions = { markdown: boolean; html: boolean; pdf: boolean };
+export type ReportFormat = "markdown" | "html" | "pdf" | "docx";
+export type ReportFormatOptions = { markdown: boolean; html: boolean; pdf: boolean; docx: boolean };
 export type FailureCategory = "selector" | "timeout" | "authentication" | "api" | "network" | "visual" | "assertion" | "environment" | "unknown";
 export type StabilityClassification = "reproducible failure" | "likely flaky" | "browser-specific" | "ci-specific" | "insufficient history" | "stable";
 
@@ -15,7 +15,7 @@ export type FailureDetails = {
   tags: string[];
 };
 export type EvidenceFiles = {
-  screenshotPaths: string[]; tracePaths: string[]; videoPaths: string[]; otherAttachments: string[];
+  screenshotPaths: string[]; tracePaths: string[]; otherAttachments: string[];
   currentUrl: string | null; consoleMessages: string[]; pageErrors: string[]; networkFailures: NetworkFailure[];
   accessibilitySnapshot: unknown | null; domSnippet: string | null;
 };
@@ -43,6 +43,6 @@ export type BugReportData = {
   aiAnalysis: AIAnalysis | null; mode: ReportMode;
 };
 export type GeneratedReports = {
-  directory: string; markdown?: string; html?: string; pdf?: string; pdfError?: string;
+  directory: string; data: string; markdown?: string; html?: string; pdf?: string; docx?: string; pdfError?: string; docxError?: string;
 };
 export type HistoryRecord = { fingerprint: string; testTitle: string; status: string; browserName: string; isCI: boolean; timestamp: string; retryNumber: number };
