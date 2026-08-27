@@ -14,26 +14,26 @@ function simple_explanation(data: FailureAnalysisData): string {
   if (expected && actual) return `The test wanted to see ${expected}, but it saw ${actual} instead.`;
   const name = friendly_test_name(details.testTitle);
   const category = categorize_failure(details.errorMessage);
-  if (category === "timeout") return `The ${name} test waited for something to happen, but it took too long.`;
-  if (category === "selector") return `The ${name} test looked for something on the page, but it could not find it.`;
-  if (category === "network" || category === "api") return `The ${name} test needed information from another service, but that request did not work.`;
-  if (category === "authentication") return `The ${name} test could not prove that the user was signed in.`;
-  return `The ${name} test tried to finish its job, but something went wrong.`;
+  if (category === "timeout") return `The ${name} task waited for something to happen, but it took too long.`;
+  if (category === "selector") return `The ${name} task looked for something, but it could not find it.`;
+  if (category === "network" || category === "api") return `The ${name} task needed information from another service, but that request did not work.`;
+  if (category === "authentication") return `The ${name} task could not prove that the user was signed in.`;
+  return `The ${name} task tried to finish its job, but something went wrong.`;
 }
 
 function likely_causes(data: FailureAnalysisData): string[] {
   const causes: string[] = [];
   const category = categorize_failure(data.details.errorMessage);
   const categoryCauses: Record<typeof category, [string, string, string]> = {
-    selector: ["The thing the test looked for may have changed its name.", "The page may not have finished showing the missing item.", "The test may be looking on the wrong page."],
-    timeout: ["The page or action may be taking too long.", "The test may be waiting for something that never appears.", "A slow service may be stopping the page from finishing."],
+    selector: ["The thing the task looked for may have changed its name.", "The program may not have finished creating the missing item.", "The task may be looking in the wrong place."],
+    timeout: ["The program or action may be taking too long.", "The task may be waiting for something that never happens.", "A slow service may be stopping the task from finishing."],
     authentication: ["The user may not have been signed in.", "The sign-in information may be missing or expired.", "The test may have been sent back to the sign-in page."],
-    api: ["A service used by the page may have returned the wrong answer.", "The page may have sent the wrong information to the service.", "The service may have been unavailable when the test ran."],
-    network: ["The page may have lost its connection.", "A service used by the page may not have answered.", "The request may have gone to the wrong place."],
+    api: ["A service used by the program may have returned the wrong answer.", "The program may have sent the wrong information to the service.", "The service may have been unavailable when the task ran."],
+    network: ["The program may have lost its connection.", "A service used by the program may not have answered.", "The request may have gone to the wrong place."],
     visual: ["The page may look different from the saved picture.", "The browser size or display settings may be different.", "The page may not have finished drawing before the picture was taken."],
-    assertion: ["The application may have returned the wrong value.", "The test may still expect an old value.", "The page may not have finished updating before it was checked."],
+    assertion: ["The program may have returned the wrong value.", "The check may still expect an old value.", "The program may not have finished updating before it was checked."],
     environment: ["The test machine may be set up differently.", "A needed setting or file may be missing.", "The browser version may behave differently."],
-    unknown: ["The page may not have reached the step the test expected.", "The test data may be missing or different.", "An earlier action may not have finished correctly."],
+    unknown: ["The program may not have reached the expected step.", "The input data may be missing or different.", "An earlier action may not have finished correctly."],
   };
   causes.push(categoryCauses[category][0]);
   const network = data.evidence.networkFailures[0];
@@ -57,8 +57,13 @@ function valid_repository_location(path: string, lineNumber: number, projectRoot
 }
 
 function related_code_locations(data: FailureAnalysisData, projectRoot: string): RelatedCodeLocation[] {
-  const candidates: Array<{ path: string; line: number; source: "test" | "stack" }> = [{ path: data.details.testFile, line: data.details.lineNumber, source: "test" }];
-  for (const match of data.details.stackTrace?.matchAll(/(?:\(|\bat\s+)([^()\r\n]+?\.(?:ts|tsx|js|jsx)):(\d+):\d+/g) ?? []) candidates.push({ path: match[1].trim(), line: Number(match[2]), source: "stack" });
+  const candidates: Array<{ path: string; line: number; source: "test" | "stack" }> = [];
+  if (data.details.testFile && data.details.lineNumber) candidates.push({ path: data.details.testFile, line: data.details.lineNumber, source: "test" });
+  const stack = data.details.stackTrace ?? "";
+  const extensions = "ts|tsx|js|jsx|mjs|cjs|py|java|cs|go|rb|php|rs|cpp|cc|c|h|hpp";
+  for (const match of stack.matchAll(new RegExp(`(?:\\(|\\bat\\s+|^\\s*)([^()\\r\\n\"]+?\\.(?:${extensions})):(\\d+)(?::\\d+)?`, "gmi"))) candidates.push({ path: match[1].trim(), line: Number(match[2]), source: "stack" });
+  for (const match of stack.matchAll(/File\s+"([^"]+\.py)",\s+line\s+(\d+)/gi)) candidates.push({ path: match[1], line: Number(match[2]), source: "stack" });
+  for (const match of stack.matchAll(/\bin\s+([^\r\n]+?\.cs):line\s+(\d+)/gi)) candidates.push({ path: match[1].trim(), line: Number(match[2]), source: "stack" });
   const category = categorize_failure(data.details.errorMessage);
   const suggestedFix = (filePath: string): string => {
     const isTest = /(^|\/)(tests?|specs?)(\/|$)|\.spec\.[jt]sx?$/.test(filePath);
@@ -118,7 +123,7 @@ export function create_http_ai_analyzer(endpoint: string, apiKey: string): AIAna
 export async function run_failure_analysis(data: FailureAnalysisData, analyzer?: AIAnalyzer, options: { model?: string; timeoutMs?: number; projectRoot?: string } = {}): Promise<FailureAnalysis> {
   const fallback = create_basic_failure_analysis(data, options.projectRoot);
   if (!analyzer) return fallback;
-  const input = sanitize({ details: data.details, evidence: data.evidence, environment: data.environment, stability: data.stability, candidateCodeLocations: fallback.relatedCodeLocations });
+  const input = sanitize({ details: data.details, evidence: data.evidence, environment: data.environment, stability: data.stability, context: data.context ?? {}, candidateCodeLocations: fallback.relatedCodeLocations });
   const timeoutMs = options.timeoutMs ?? 15_000;
   const allowedLocations = new Set(fallback.relatedCodeLocations.map(location => `${location.filePath}:${location.lineNumber}`));
   try {

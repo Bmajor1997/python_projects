@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
-import { format_failure_summary, normalize_failure_analysis_data } from "./bug-report-generator";
+import { format_failure_summary, normalize_failure_analysis_data } from "./failure-output";
 import type { FailureAnalysisData, GeneratedAnalysisArtifacts } from "./types";
 
 function make_filename(data: FailureAnalysisData): string {

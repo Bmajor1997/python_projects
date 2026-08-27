@@ -2,9 +2,8 @@ import { join } from "node:path";
 import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 import { build_failure_analysis_data, collect_environment, collect_failure_details, find_evidence } from "./bug-report-generator";
 import { append_history, read_history } from "./history";
-import type { FailedTest, ReportMode } from "./types";
-import { save_failure_analysis } from "./report-bundle";
-import { create_http_ai_analyzer, run_failure_analysis } from "./ai-analysis";
+import type { ReportMode } from "./types";
+import { analyze_failure_data, analyzer_from_environment } from "./failure-analysis";
 
 export default class BugReportReporter implements Reporter {
   private readonly pendingAnalyses = new Set<Promise<void>>();
@@ -30,14 +29,11 @@ export default class BugReportReporter implements Reporter {
       return;
     }
     try {
-      const failure = { test, result } satisfies FailedTest;
+      const failure = { test, result };
       const history = await read_history(historyPath);
       const data = build_failure_analysis_data(collect_failure_details(failure), find_evidence(result), collect_environment(failure), mode, history);
-      const endpoint = process.env.FAILURE_ANALYSIS_ENDPOINT, apiKey = process.env.FAILURE_ANALYSIS_API_KEY;
-      const analyzer = endpoint && apiKey ? create_http_ai_analyzer(endpoint, apiKey) : undefined;
-      data.analysis = await run_failure_analysis(data, analyzer, { model: process.env.FAILURE_ANALYSIS_MODEL, projectRoot: process.cwd() });
-      const reports = await save_failure_analysis(data, join(process.cwd(), "test-results", "failure-analyses"));
-      await append_history(historyPath, { ...historyRecord, fingerprint: data.fingerprint });
+      const { data: analyzed, artifacts: reports } = await analyze_failure_data(data, process.cwd(), { analyzer: analyzer_from_environment(), model: process.env.FAILURE_ANALYSIS_MODEL });
+      await append_history(historyPath, { ...historyRecord, fingerprint: analyzed.fingerprint });
       console.log(`Failure analysis data: ${reports.data}`);
       console.log(`Failure summary: ${reports.markdown}`);
     } catch (error) { console.error(`Unable to save failure analysis: ${error instanceof Error ? error.message : String(error)}`); }

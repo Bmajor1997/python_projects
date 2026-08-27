@@ -1,17 +1,19 @@
 {
   "name": "playwright-bug-report-assistant",
   "version": "2.0.0",
-  "description": "Automated, evidence-rich Playwright failure analysis",
+  "description": "Framework-independent automated failure analysis with a Playwright adapter",
   "type": "commonjs",
   "scripts": {
     "test": "playwright test",
     "test:list": "playwright test --list",
     "typecheck": "tsc --noEmit",
-    "test:unit": "playwright test tests/unit.spec.ts"
+    "test:unit": "playwright test tests/unit.spec.ts",
+    "analyze": "tsx src/cli.ts"
   },
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
     "typescript": "^7.0.2"
   },
   "dependencies": {

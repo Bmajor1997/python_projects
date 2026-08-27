@@ -1,8 +1,8 @@
-# Playwright Failure Analysis Assistant
+# Failure Analysis Assistant
 
-This project is an automation-only Playwright failure analysis assistant. Its custom reporter reacts to failed Playwright tests and collects sanitized diagnostic data, including failure details, screenshots, traces, runtime context, environment and CI metadata, fingerprints, history, and stability analysis.
+This project analyzes failures from scripts, applications, tests, and CI jobs. Playwright is supported through an adapter, but the shared analysis core does not depend on Playwright.
 
-Each failure receives a short explanation written in very simple language, up to three likely causes, and up to three trustworthy repository code locations. Each location includes its exact line number, confidence score, and a suggested fix. The assistant returns fewer locations when the captured test and stack data do not support three real locations.
+Each failure receives a short explanation in very simple language, three likely causes, and up to three trustworthy repository code locations. Every location includes an exact line number, confidence score, and suggested fix. The assistant returns fewer locations rather than inventing files or line numbers.
 
 ## Setup
 
@@ -12,49 +12,64 @@ npx playwright install chromium
 npm test
 ```
 
-Use `src/fixtures.ts` instead of importing `test` directly from Playwright when console warnings and errors, page exceptions, failed responses, current URL, DOM, and accessibility context should be captured. The reporter still works without the fixture and degrades to attachment-only evidence.
+## Analyze any failure
 
-## Automated flow
+Create a JSON input file:
 
-The reporter is registered in `playwright.config.ts`:
-
-```text
-Playwright test runs
-→ test fails
-→ custom reporter receives the failure
-→ failure, evidence, environment, fingerprint, history, and stability data are collected
-→ analysis data, a summary, and evidence artifacts are written
+```json
+{
+  "name": "Import customer data",
+  "errorMessage": "FileNotFoundError: customers.csv was not found",
+  "stackTrace": "File \"C:/projects/example/import.py\", line 18, in load_customers",
+  "projectRoot": "C:/projects/example",
+  "sourceFile": "C:/projects/example/import.py",
+  "lineNumber": 18
+}
 ```
 
-Analysis artifacts are written to `test-results/failure-analyses/<test-project-fingerprint>/`. History is stored in `test-results/bug-report-history.json`.
+Run:
+
+```sh
+npm run analyze -- failure.json
+```
+
+The CLI also accepts the same JSON through standard input. Code can call `analyze_failure()` from `src/failure-analysis.ts` directly.
+
+The generic input supports a name, error message, stack trace, project root, optional source location, status, expected and actual values, steps, evidence paths, and additional context. Common JavaScript, TypeScript, Python, C#, Java, Go, Ruby, PHP, Rust, C, and C++ stack locations are recognized when they contain repository-resolvable paths.
+
+## Playwright adapter
+
+The custom reporter remains registered in `playwright.config.ts`:
+
+```text
+Playwright test fails
+→ Playwright adapter collects browser evidence
+→ shared failure-analysis core runs
+→ JSON, Markdown, and evidence artifacts are written
+```
+
+Use `src/fixtures.ts` when console warnings and errors, page exceptions, failed responses, current URL, DOM, and accessibility context should be captured. The reporter still works without the fixture.
+
+## Output
+
+Artifacts are written under `test-results/failure-analyses/` by default:
+
+- `failure-analysis.json`
+- `failure-summary.md`
+- Copied evidence files
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `BUG_REPORT_MODE` | `developer` | `developer`, `product`, or `customer-safe` |
-| `BUG_REPORT_SAFE_ENV` | `CI,NODE_ENV` | Comma-separated environment-variable allowlist |
+| `BUG_REPORT_MODE` | `developer` | Transitional Playwright disclosure mode |
+| `BUG_REPORT_SAFE_ENV` | `CI,NODE_ENV` | Playwright environment-variable allowlist |
 | `FAILURE_ANALYSIS_ENDPOINT` | unset | Optional HTTP analysis-provider endpoint |
 | `FAILURE_ANALYSIS_API_KEY` | unset | API key used with the optional endpoint |
 | `FAILURE_ANALYSIS_MODEL` | `configured-model` | Optional provider model name |
-`failure-analysis.json` is the persisted, sanitized `FailureAnalysisData` payload. `failure-summary.md` is the concise human-readable artifact. Evidence is copied when possible and always linked; large traces remain separate files.
 
-Without an external provider, the reporter still creates a basic analysis from the Playwright error, captured browser evidence, test file, and stack trace. Provider output is accepted only when it follows the small analysis schema and uses code locations already verified against the repository.
+Without an external provider, the shared engine creates a baseline analysis from the error, evidence, source location, and stack trace. Provider output is accepted only when it follows the small analysis schema and uses locations already verified against the repository.
 
-## Security and privacy
+## Security
 
-All artifacts are generated from the same recursively sanitized payload. Authorization data, cookies, passwords, tokens, API keys, sensitive URL parameters, and token-shaped strings are redacted. Environment variables are denied by default except for the explicit allowlist. Customer-safe mode additionally removes stack traces, internal paths, request details, DOM content, accessibility content, source revision data, and diagnostic logs.
-
-Captured request and response bodies are disabled by default because they are likely to contain private data. Projects that add them to `bug-report-context` must sanitize and size-limit them first.
-
-## Stability and optional AI analysis
-
-Failures use a SHA-256 fingerprint derived from normalized test identity, category, error, relevant stack frame, route, and browser. Historical results support evidence-backed stability classifications; fewer than three samples are reported as insufficient history.
-
-`src/ai-analysis.ts` exposes the existing transitional `AIAnalyzer` interface. It accepts only the sanitized failure-analysis payload, applies a timeout, and safely falls back when unavailable. The final AI failure-analysis schema will be designed separately.
-
-## Limitations
-
-- Reporters cannot directly access a live `Page`; rich runtime evidence requires the supplied automatic fixture.
-- Browser version is unavailable through the reporter API alone.
-- Visual baseline comparison uses Playwright's built-in screenshot assertions and project baselines.
+Artifacts and provider inputs are recursively sanitized. Authorization data, cookies, passwords, tokens, API keys, sensitive URL parameters, and token-shaped strings are redacted. Generated directories, dependencies, and paths outside the repository are rejected as related code locations.
