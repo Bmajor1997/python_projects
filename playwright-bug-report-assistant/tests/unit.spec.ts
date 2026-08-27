@@ -4,10 +4,7 @@ import { normalize_failure_text } from "../src/fingerprint";
 import { analyze_stability } from "../src/stability";
 import type { HistoryRecord } from "../src/types";
 import { run_ai_analysis } from "../src/ai-analysis";
-import { GitHubIssuePublisher } from "../src/publisher";
 import { expectation_values, friendly_failure_message, friendly_report_title } from "../src/text-utils";
-import { load_manual_scenarios } from "../src/manual-scenarios";
-import { writeFile } from "node:fs/promises";
 
 test("recursively redacts secrets and sensitive URL values", () => {
   const value = sanitize({ Authorization: "Bearer top-secret-token", nested: { password: "hunter2", url: "https://example.test/?token=abc&view=ok" } });
@@ -38,14 +35,4 @@ test("AI analysis is optional and falls back on provider failure", async () => {
   const data = { details: { errorMessage: "secret" }, evidence: {}, environment: {}, stability: {} } as never;
   expect(await run_ai_analysis(data, undefined, { enabled: false })).toBeNull();
   expect(await run_ai_analysis(data, async () => { throw new Error("offline"); }, { enabled: true })).toBeNull();
-});
-test("publishing dry-run performs no external request", async () => {
-  const publisher = new GitHubIssuePublisher("owner", "repo", "secret-token");
-  expect(await publisher.publish({ title: "Bug", body: "Preview", fingerprint: "abc" }, true)).toBeNull();
-});
-
-test("curated scenarios reject files outside the configured project", async ({}, testInfo) => {
-  const config = testInfo.outputPath("manual-scenarios.json");
-  await writeFile(config, JSON.stringify({ scenarios: [{ id: "unsafe", name: "Unsafe", description: "Unsafe", testFile: "../outside.spec.ts", testName: "test", project: "chromium" }] }));
-  await expect(load_manual_scenarios(testInfo.outputDir, config)).rejects.toThrow("outside the project");
 });

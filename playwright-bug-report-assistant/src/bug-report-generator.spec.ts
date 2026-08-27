@@ -37,14 +37,6 @@ function create_report_data(): ReportData {
       executionTime: new Date("2026-08-24T14:00:00.000Z"),
       browserVersion: null, viewport: null, locale: null, timezone: null, commitSha: null, branch: null, ciRunUrl: null, ciProvider: null, safeEnvironment: {},
     },
-    humanReview: {
-      confirmedDefect: "  Yes  ",
-      severity: "  High  ",
-      priority: "  P1  ",
-      finalTitle: "  Checkout payment fails  ",
-      notes: "  Reproduced twice  ",
-      ticketUrl: "  https://example.com/BUG-101  ",
-    },
     generatedAt: new Date("2026-08-24T14:01:00.000Z"),
     automatedWarning: "  Requires human review.  ",
     fingerprint: "abcdef1234567890",
@@ -93,45 +85,6 @@ test.describe("normalize_report_data", () => {
     expect(normalized.evidence.otherAttachments).toEqual([
       "test-results/network.txt",
     ]);
-  });
-
-  test("converts empty human-review strings to null", () => {
-    const report_data = create_report_data();
-
-    report_data.humanReview = {
-      confirmedDefect: "   ",
-      severity: "",
-      priority: "   ",
-      finalTitle: "",
-      notes: "   ",
-      ticketUrl: "",
-    };
-
-    const normalized = normalize_report_data(report_data);
-
-    expect(normalized.humanReview).toEqual({
-      confirmedDefect: null,
-      severity: null,
-      priority: null,
-      finalTitle: null,
-      notes: null,
-      ticketUrl: null,
-    });
-  });
-
-  test("preserves Yes and No confirmed-defect values", () => {
-    const yes_report = create_report_data();
-    yes_report.humanReview.confirmedDefect = "  Yes  ";
-
-    const no_report = create_report_data();
-    no_report.humanReview.confirmedDefect = "  No  ";
-
-    expect(
-      normalize_report_data(yes_report).humanReview.confirmedDefect
-    ).toBe("Yes");
-    expect(
-      normalize_report_data(no_report).humanReview.confirmedDefect
-    ).toBe("No");
   });
 
   test("does not modify the original report data", () => {

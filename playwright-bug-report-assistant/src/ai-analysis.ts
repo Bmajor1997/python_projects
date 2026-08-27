@@ -1,4 +1,4 @@
-import type { AIAnalysis, BugReportData } from "./types";
+import type { AIAnalysis, FailureAnalysisData } from "./types";
 import { sanitize } from "./sanitizer";
 
 export type AIAnalyzer = (sanitizedInput: unknown, options: { model: string; timeoutMs: number }) => Promise<AIAnalysis>;
@@ -11,7 +11,7 @@ export function create_http_ai_analyzer(endpoint: string, apiKey: string): AIAna
     return value;
   };
 }
-export async function run_ai_analysis(data: BugReportData, analyzer: AIAnalyzer | undefined, options: { enabled: boolean; model?: string; timeoutMs?: number }): Promise<AIAnalysis | null> {
+export async function run_ai_analysis(data: FailureAnalysisData, analyzer: AIAnalyzer | undefined, options: { enabled: boolean; model?: string; timeoutMs?: number }): Promise<AIAnalysis | null> {
   if (!options.enabled || !analyzer) return null;
   const input = sanitize({ details: data.details, evidence: data.evidence, environment: data.environment, stability: data.stability });
   const timeoutMs = options.timeoutMs ?? 15_000;

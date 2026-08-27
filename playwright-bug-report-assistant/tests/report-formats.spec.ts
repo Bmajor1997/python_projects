@@ -5,17 +5,15 @@ import { escape_html, format_html } from "../src/html-report";
 import { make_report_folder_name } from "../src/file-utils";
 import { format_markdown, normalize_report_data } from "../src/bug-report-generator";
 import { read_report_data, regenerate_report_bundle, report_formats_from_env, save_report_bundle, write_pdf } from "../src/report-bundle";
-import type { BugReportData } from "../src/types";
-import { escape_markdown } from "../src/text-utils";
+import type { FailureAnalysisData } from "../src/types";
 import JSZip from "jszip";
-import { create_jira_draft } from "../src/jira-draft";
 
-function report(mode: BugReportData["mode"] = "developer"): BugReportData {
+function report(mode: FailureAnalysisData["mode"] = "developer"): FailureAnalysisData {
   return {
     details: { testTitle: "Checkout <script>alert(1)</script>", testFile: "tests/checkout.spec.ts", lineNumber: 4, columnNumber: 2, status: "failed", errorMessage: "Expected <paid> Bearer abcdefghijklmnop", stackTrace: "Error <unsafe>", startTime: new Date("2026-08-25T12:00:00Z"), durationMs: 50, retryNumber: 0, testSteps: ["Submit <payment>"], expectedBehavior: "Receipt <shown>", actualBehavior: "Error <shown>", failedStep: "Submit <payment>", tags: [] },
     evidence: { screenshotPaths: [], tracePaths: [], otherAttachments: [], currentUrl: "https://shop.test/?token=secret", consoleMessages: ["console <secret>"], pageErrors: ["page <secret>"], networkFailures: [{ method: "GET", url: "https://api.test/<private>", status: 500, reason: "bad <gateway>" }], accessibilitySnapshot: null, domSnippet: "<input value=secret>" },
     environment: { operatingSystem: "Windows", systemRelease: "11", projectName: "chromium", browserName: "chromium", browserVersion: null, viewport: { width: 1280, height: 720 }, locale: "en-US", timezone: "UTC", executionTime: new Date("2026-08-25T12:00:00Z"), commitSha: "deadbeef", branch: "main", ciRunUrl: "https://ci.test/run/1", ciProvider: "CI", safeEnvironment: { CI: "true" } },
-    humanReview: { confirmedDefect: null, severity: null, priority: null, finalTitle: null, notes: null, ticketUrl: null }, generatedAt: new Date("2026-08-25T12:01:00Z"), automatedWarning: "Automatically generated.", fingerprint: "abcdef1234567890", stability: { classification: "insufficient history", observations: [], sampleSize: 0, failureRate: null, recentTrend: "unknown", consecutivePasses: 0, consecutiveFailures: 0 }, aiAnalysis: null, mode,
+    generatedAt: new Date("2026-08-25T12:01:00Z"), automatedWarning: "Automatically generated.", fingerprint: "abcdef1234567890", stability: { classification: "insufficient history", observations: [], sampleSize: 0, failureRate: null, recentTrend: "unknown", consecutivePasses: 0, consecutiveFailures: 0 }, aiAnalysis: null, mode,
   };
 }
 
@@ -35,28 +33,11 @@ test("customer-safe HTML omits internal diagnostics and secrets", () => {
   expect(html).toContain("[REDACTED]");
 });
 
-test("human-review defaults say Pending Review and remain editable in HTML", () => {
-  const html = format_html(report());
-  expect(html.match(/contenteditable="true"/g)).toHaveLength(6);
-  expect(html.match(/>Pending Review<\/span>/g)).toHaveLength(6);
-  expect(html).not.toMatch(/>Pending<\/span>/);
-  expect(format_markdown(report()).match(/Pending Review/g)).toHaveLength(6);
-});
-
-test("a reviewer can replace Pending Review in the HTML report", async ({ page }) => {
-  await page.setContent(format_html(report()));
-  const severity = page.getByRole("textbox", { name: "Severity" });
-  await severity.fill("Needs team discussion");
-  await expect(severity).toHaveText("Needs team discussion");
-});
-
-test("custom human-review wording replaces the default", () => {
+test("failure analysis data and rendered reports omit human review", () => {
   const data = report();
-  data.humanReview = { confirmedDefect: "Confirmed", severity: "High", priority: "P1", finalTitle: "Checkout is blocked", notes: "Customer reproduced it", ticketUrl: "https://tickets.test/BUG-1" };
-  const html = format_html(data), markdown = format_markdown(data);
-  for (const value of Object.values(data.humanReview)) { expect(html).toContain(value!); expect(markdown).toContain(escape_markdown(value!)); }
-  expect(html).not.toContain("Pending Review");
-  expect(markdown).not.toContain("Pending Review");
+  expect(data).not.toHaveProperty("humanReview");
+  expect(format_html(data)).not.toContain("Human review");
+  expect(format_markdown(data)).not.toContain("Human review");
 });
 
 test("report folder name is deterministic", () => {
@@ -77,41 +58,28 @@ test("creates Markdown, HTML, PDF, DOCX, and copied evidence", async ({}, testIn
   expect(await readFile(output.pdf!, "utf8")).toBe("%PDF-test");
   const docx = await readFile(output.docx!); expect(docx.subarray(0, 2).toString()).toBe("PK");
   const documentXml = await (await JSZip.loadAsync(docx)).file("word/document.xml")!.async("string");
-  expect(documentXml).toContain("Pending Review");
+  expect(documentXml).not.toContain("Human review");
   expect(documentXml).not.toContain("Bearer abcdefghijklmnop");
   expect(await readFile(join(output.directory, "evidence", "failure.png"), "utf8")).toBe("image");
   expect((await read_report_data(output.data)).details.errorMessage).toContain("[REDACTED]");
 });
 
-test("review edits regenerate every report from sanitized persisted data", async ({}, testInfo) => {
+test("regenerates every report from sanitized persisted data", async ({}, testInfo) => {
   const original = await save_report_bundle(report(), testInfo.outputPath("reports"), { markdown: true, html: true, pdf: true, docx: true }, async (_html, pdf) => writeFile(pdf, "%PDF-first"));
   const data = await read_report_data(original.data);
-  data.humanReview.finalTitle = "Customer <cannot> complete checkout";
+  data.automatedWarning = "Automated <analysis> refreshed";
   const updated = await regenerate_report_bundle(data, original.directory, { markdown: true, html: true, pdf: true, docx: true }, async (_html, pdf) => writeFile(pdf, "%PDF-updated"));
-  expect(await readFile(updated.markdown!, "utf8")).toContain(escape_markdown("Customer <cannot> complete checkout"));
-  expect(await readFile(updated.html!, "utf8")).toContain("Customer &lt;cannot&gt; complete checkout");
+  expect(await readFile(updated.markdown!, "utf8")).toContain("Automated <analysis> refreshed");
+  expect(await readFile(updated.html!, "utf8")).toContain("Automated &lt;analysis&gt; refreshed");
   expect(await readFile(updated.pdf!, "utf8")).toBe("%PDF-updated");
 });
 
-test("Jira preview uses SCRUM Bug fields and sanitized review title", () => {
-  const data = report();
-  data.humanReview.finalTitle = "Checkout <blocked>";
-  data.evidence.screenshotPaths = ["evidence/failure.png"];
-  const draft = create_jira_draft(data);
-  expect(draft.projectKey).toBe("SCRUM");
-  expect(draft.issueType).toBe("Bug");
-  expect(draft.summary).toBe("Checkout <blocked>");
-  expect(draft.screenshotPaths).toEqual(["evidence/failure.png"]);
-  expect(draft.description).not.toContain("abcdefghijklmnop");
-});
-
-test("DOCX preserves custom review text and customer-safe omissions", async ({}, testInfo) => {
+test("DOCX preserves customer-safe omissions", async ({}, testInfo) => {
   const data = report("customer-safe");
-  data.humanReview.severity = "Needs team discussion";
   const output = await save_report_bundle(data, testInfo.outputPath("reports"), { markdown: false, html: false, pdf: false, docx: true });
   const zip = await JSZip.loadAsync(await readFile(output.docx!));
   const xml = await zip.file("word/document.xml")!.async("string");
-  expect(xml).toContain("Needs team discussion");
+  expect(xml).not.toContain("Human review");
   expect(xml).not.toContain("console &lt;secret&gt;");
   expect(xml).not.toContain("deadbeef");
   expect(xml).not.toContain("Error &lt;unsafe&gt;");

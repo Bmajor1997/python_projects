@@ -8,12 +8,11 @@ import {
 import { normalize_report_data } from "./bug-report-generator";
 import { categorize_failure } from "./fingerprint";
 import { friendly_report_title, friendly_test_name } from "./text-utils";
-import type { BugReportData } from "./types";
+import type { FailureAnalysisData } from "./types";
 
 const BLUE = "2E74B5", DARK_BLUE = "1F4D78", INK = "172033", MUTED = "667085", FILL = "E8EEF5", LINE = "D7DCE5";
 const TABLE_WIDTH = 9360, TABLE_INDENT = 120, CELL_MARGINS = { top: 80, bottom: 80, left: 120, right: 120 };
 const show = (value: unknown) => value === null || value === undefined || value === "" ? "Unavailable" : String(value);
-const review = (value: string | null) => value ?? "Pending Review";
 
 function heading(text: string, level: typeof HeadingLevel.HEADING_1 | typeof HeadingLevel.HEADING_2): Paragraph {
   return new Paragraph({ text, heading: level, keepNext: true });
@@ -38,7 +37,7 @@ function imageSize(data: Buffer): { width: number; height: number } {
   const maxWidth = 560, maxHeight = 420, scale = Math.min(maxWidth / width, maxHeight / height, 1);
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
-async function screenshotParagraph(data: BugReportData, outputPath: string): Promise<Paragraph> {
+async function screenshotParagraph(data: FailureAnalysisData, outputPath: string): Promise<Paragraph> {
   const relativePath = data.evidence.screenshotPaths[0];
   if (!relativePath) return new Paragraph({ text: "No screenshot captured." });
   try {
@@ -48,7 +47,7 @@ async function screenshotParagraph(data: BugReportData, outputPath: string): Pro
   } catch { return new Paragraph({ text: `Screenshot available separately: ${relativePath}` }); }
 }
 
-export async function create_docx_report(input: BugReportData, outputPath: string): Promise<void> {
+export async function create_docx_report(input: FailureAnalysisData, outputPath: string): Promise<void> {
   const data = normalize_report_data(input), { details: d, evidence: e, environment: n } = data;
   const title = data.aiAnalysis?.title ?? friendly_report_title(d.errorMessage, d.testTitle, d.expectedBehavior, d.actualBehavior);
   const children: Array<Paragraph | Table> = [
@@ -73,8 +72,6 @@ export async function create_docx_report(input: BugReportData, outputPath: strin
   }
   children.push(heading("Stability assessment", HeadingLevel.HEADING_1), new Paragraph({ children: [new TextRun({ text: data.stability.classification, bold: true })] }), ...(data.stability.observations.length ? data.stability.observations.map(bullet) : [new Paragraph({ text: "Insufficient observations for a specific finding." })]));
   if (data.mode === "developer") children.push(heading("Technical details", HeadingLevel.HEADING_1), new Paragraph({ children: [new TextRun({ text: d.stackTrace ?? "Unavailable", font: "Courier New", size: 16 })], shading: { fill: "F2F4F7" }, spacing: { before: 80, after: 120, line: 220 }, widowControl: false }));
-  children.push(new Paragraph({ text: "Human review", heading: HeadingLevel.HEADING_1, pageBreakBefore: true, keepNext: true }), labelValueRows([["Confirmed defect", review(data.humanReview.confirmedDefect)], ["Severity", review(data.humanReview.severity)], ["Priority", review(data.humanReview.priority)], ["Final title", review(data.humanReview.finalTitle)], ["Notes", review(data.humanReview.notes)], ["Ticket URL", review(data.humanReview.ticketUrl)]]));
-
   const doc = new Document({ title, subject: "Playwright bug report", creator: "Playwright Bug Report Assistant", description: "Editable, sanitized Playwright failure report",
     styles: { default: { document: { run: { font: "Calibri", size: 22, color: INK }, paragraph: { spacing: { after: 120, line: 300 } } },
       heading1: { run: { font: "Calibri", size: 32, bold: true, color: BLUE }, paragraph: { spacing: { before: 360, after: 200 }, keepNext: true } },

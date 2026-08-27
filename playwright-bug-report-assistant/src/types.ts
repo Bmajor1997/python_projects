@@ -27,7 +27,6 @@ export type EnvironmentDetails = {
   commitSha: string | null; branch: string | null; ciRunUrl: string | null; ciProvider: string | null;
   safeEnvironment: Record<string, string>;
 };
-export type HumanReview = { confirmedDefect: string | null; severity: string | null; priority: string | null; finalTitle: string | null; notes: string | null; ticketUrl: string | null };
 export type AIAnalysis = {
   title: string; summary: string; category: FailureCategory; likelyCause: string;
   severity: string; priority: string; relevantStep: string | null; investigationSteps: string[];
@@ -37,8 +36,8 @@ export type StabilityAnalysis = {
   classification: StabilityClassification; observations: string[]; sampleSize: number;
   failureRate: number | null; recentTrend: string; consecutivePasses: number; consecutiveFailures: number;
 };
-export type BugReportData = {
-  details: FailureDetails; evidence: EvidenceFiles; environment: EnvironmentDetails; humanReview: HumanReview;
+export type FailureAnalysisData = {
+  details: FailureDetails; evidence: EvidenceFiles; environment: EnvironmentDetails;
   generatedAt: Date; automatedWarning: string; fingerprint: string; stability: StabilityAnalysis;
   aiAnalysis: AIAnalysis | null; mode: ReportMode;
 };

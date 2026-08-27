@@ -5,12 +5,12 @@ import { chromium } from "playwright";
 import { format_html } from "./html-report";
 import { format_markdown, normalize_report_data } from "./bug-report-generator";
 import { make_report_folder_name } from "./file-utils";
-import type { BugReportData, GeneratedReports, ReportFormatOptions } from "./types";
+import type { FailureAnalysisData, GeneratedReports, ReportFormatOptions } from "./types";
 import { create_docx_report } from "./docx-report";
 
 export const DEFAULT_REPORT_FORMATS: ReportFormatOptions = { markdown: true, html: true, pdf: true, docx: true };
 export type PdfWriter = (htmlPath: string, pdfPath: string) => Promise<void>;
-export type DocxWriter = (data: BugReportData, docxPath: string) => Promise<void>;
+export type DocxWriter = (data: FailureAnalysisData, docxPath: string) => Promise<void>;
 
 export function boolean_setting(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === "") return fallback;
@@ -33,7 +33,7 @@ export const write_pdf: PdfWriter = async (htmlPath, pdfPath) => {
   } finally { await browser.close(); }
 };
 
-async function localize_evidence(data: BugReportData, directory: string): Promise<{ data: BugReportData; screenshotSource?: string }> {
+async function localize_evidence(data: FailureAnalysisData, directory: string): Promise<{ data: FailureAnalysisData; screenshotSource?: string }> {
   const evidenceDirectory = join(directory, "evidence");
   await mkdir(evidenceDirectory, { recursive: true });
   const used = new Map<string, number>();
@@ -62,7 +62,7 @@ async function localize_evidence(data: BugReportData, directory: string): Promis
   return { data: localized, screenshotSource };
 }
 
-async function screenshot_source(data: BugReportData, directory: string): Promise<string | undefined> {
+async function screenshot_source(data: FailureAnalysisData, directory: string): Promise<string | undefined> {
   const first = data.evidence.screenshotPaths[0];
   if (!first) return undefined;
   try {
@@ -73,19 +73,19 @@ async function screenshot_source(data: BugReportData, directory: string): Promis
   } catch { return undefined; }
 }
 
-export function serialize_report_data(input: BugReportData): string {
+export function serialize_report_data(input: FailureAnalysisData): string {
   return JSON.stringify(normalize_report_data(input), null, 2);
 }
 
-export async function read_report_data(path: string): Promise<BugReportData> {
-  const parsed = JSON.parse(await readFile(path, "utf8")) as BugReportData;
+export async function read_report_data(path: string): Promise<FailureAnalysisData> {
+  const parsed = JSON.parse(await readFile(path, "utf8")) as FailureAnalysisData;
   parsed.details.startTime = new Date(parsed.details.startTime);
   parsed.environment.executionTime = new Date(parsed.environment.executionTime);
   parsed.generatedAt = new Date(parsed.generatedAt);
   return normalize_report_data(parsed);
 }
 
-async function write_report_files(data: BugReportData, directory: string, formats: ReportFormatOptions, pdfWriter: PdfWriter, docxWriter: DocxWriter, screenshotSource?: string): Promise<GeneratedReports> {
+async function write_report_files(data: FailureAnalysisData, directory: string, formats: ReportFormatOptions, pdfWriter: PdfWriter, docxWriter: DocxWriter, screenshotSource?: string): Promise<GeneratedReports> {
   const reports: GeneratedReports = { directory, data: join(directory, "bug-report-data.json") };
   await writeFile(reports.data, serialize_report_data(data), "utf8");
   if (formats.markdown) { reports.markdown = join(directory, "bug-report.md"); await writeFile(reports.markdown, format_markdown(data), "utf8"); }
@@ -104,7 +104,7 @@ async function write_report_files(data: BugReportData, directory: string, format
   return reports;
 }
 
-export async function save_report_bundle(input: BugReportData, outputRoot: string, formats: ReportFormatOptions = DEFAULT_REPORT_FORMATS, pdfWriter: PdfWriter = write_pdf, docxWriter: DocxWriter = create_docx_report): Promise<GeneratedReports> {
+export async function save_report_bundle(input: FailureAnalysisData, outputRoot: string, formats: ReportFormatOptions = DEFAULT_REPORT_FORMATS, pdfWriter: PdfWriter = write_pdf, docxWriter: DocxWriter = create_docx_report): Promise<GeneratedReports> {
   const sanitized = normalize_report_data(input);
   const directory = join(outputRoot, make_report_folder_name(sanitized));
   await mkdir(directory, { recursive: true });
@@ -112,7 +112,7 @@ export async function save_report_bundle(input: BugReportData, outputRoot: strin
   return write_report_files(data, directory, formats, pdfWriter, docxWriter, localized.screenshotSource);
 }
 
-export async function regenerate_report_bundle(input: BugReportData, directory: string, formats: ReportFormatOptions = DEFAULT_REPORT_FORMATS, pdfWriter: PdfWriter = write_pdf, docxWriter: DocxWriter = create_docx_report): Promise<GeneratedReports> {
+export async function regenerate_report_bundle(input: FailureAnalysisData, directory: string, formats: ReportFormatOptions = DEFAULT_REPORT_FORMATS, pdfWriter: PdfWriter = write_pdf, docxWriter: DocxWriter = create_docx_report): Promise<GeneratedReports> {
   const data = normalize_report_data(input);
   await mkdir(directory, { recursive: true });
   return write_report_files(data, directory, formats, pdfWriter, docxWriter, await screenshot_source(data, directory));

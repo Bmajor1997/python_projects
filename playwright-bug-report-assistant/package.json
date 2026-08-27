@@ -1,38 +1,22 @@
 {
   "name": "playwright-bug-report-assistant",
   "version": "2.0.0",
-  "description": "Secure, evidence-rich Playwright bug reports",
-  "main": "dist/desktop/main.js",
+  "description": "Automated, evidence-rich Playwright failure analysis",
   "type": "commonjs",
   "scripts": {
     "test": "playwright test",
     "test:list": "playwright test --list",
     "typecheck": "tsc --noEmit",
-    "test:unit": "playwright test tests/unit.spec.ts",
-    "desktop:build": "tsc -p tsconfig.desktop.json",
-    "desktop:start": "npm run desktop:build && electron .",
-    "desktop:package": "npm run desktop:build && cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium && electron-builder --win"
+    "test:unit": "playwright test tests/unit.spec.ts"
   },
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "cross-env": "^10.0.0",
-    "electron": "^38.0.0",
-    "electron-builder": "^26.0.12",
     "jszip": "^3.10.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "@playwright/test": "^1.62.1",
     "docx": "^9.7.1"
-  },
-  "build": {
-    "appId": "com.benjaminctmajor.playwrightbugreportassistant",
-    "productName": "Playwright Bug Report Assistant",
-    "asar": false,
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "desktop/renderer/**/*", "manual-scenarios.json", "playwright.config.ts", "src/**/*", "tests/**/*", "package.json", "node_modules/playwright-core/.local-browsers/**/*"],
-    "win": { "target": "nsis" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
   }
 }
