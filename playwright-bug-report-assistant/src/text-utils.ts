@@ -20,6 +20,3 @@ export function friendly_test_name(value: string): string {
   return value.split(" > ").map(part => part.trim()).filter(Boolean).at(-1) ?? value;
 }
 export function escape_markdown(value: string): string { return value.replace(/([\\`*_{}\[\]<>()#+\-.!|>])/g, "\\$1"); }
-export function log_error(operation: string, error: unknown): void {
-  console.error(`[Bug Report Assistant] ${operation}: ${error instanceof Error ? error.message : String(error)}`);
-}

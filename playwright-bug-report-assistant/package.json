@@ -12,11 +12,9 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "jszip": "^3.10.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@playwright/test": "^1.62.1",
-    "docx": "^9.7.1"
+    "@playwright/test": "^1.62.1"
   }
 }

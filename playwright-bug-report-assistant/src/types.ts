@@ -1,8 +1,6 @@
 import type { TestCase, TestResult } from "@playwright/test/reporter";
 
 export type ReportMode = "developer" | "product" | "customer-safe";
-export type ReportFormat = "markdown" | "html" | "pdf" | "docx";
-export type ReportFormatOptions = { markdown: boolean; html: boolean; pdf: boolean; docx: boolean };
 export type FailureCategory = "selector" | "timeout" | "authentication" | "api" | "network" | "visual" | "assertion" | "environment" | "unknown";
 export type StabilityClassification = "reproducible failure" | "likely flaky" | "browser-specific" | "ci-specific" | "insufficient history" | "stable";
 
@@ -41,7 +39,5 @@ export type FailureAnalysisData = {
   generatedAt: Date; automatedWarning: string; fingerprint: string; stability: StabilityAnalysis;
   aiAnalysis: AIAnalysis | null; mode: ReportMode;
 };
-export type GeneratedReports = {
-  directory: string; data: string; markdown?: string; html?: string; pdf?: string; docx?: string; pdfError?: string; docxError?: string;
-};
+export type GeneratedAnalysisArtifacts = { directory: string; data: string; markdown: string };
 export type HistoryRecord = { fingerprint: string; testTitle: string; status: string; browserName: string; isCI: boolean; timestamp: string; retryNumber: number };

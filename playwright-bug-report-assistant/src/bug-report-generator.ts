@@ -1,8 +1,7 @@
 import { existsSync } from "node:fs";
 import { platform, release } from "node:os";
-import { join, relative } from "node:path";
+import { relative } from "node:path";
 import type { TestResult } from "@playwright/test/reporter";
-import { make_filename, save_file } from "./file-utils";
 import { clean_error_text, escape_markdown, expectation_values, friendly_failure_message, friendly_report_title, friendly_test_name } from "./text-utils";
 import { sanitize, safe_environment } from "./sanitizer";
 import { categorize_failure, create_fingerprint } from "./fingerprint";
@@ -97,14 +96,4 @@ export function format_markdown(input: FailureAnalysisData): string {
   if (data.aiAnalysis) lines.push("", "## AI suggestions — human review required", "", data.aiAnalysis.summary, "", `- **Likely cause:** ${data.aiAnalysis.likelyCause}`, `- **Confidence:** ${Math.round(data.aiAnalysis.confidence * 100)}%`, "- **Assumptions:**", ...data.aiAnalysis.assumptions.map(x => `  - ${x}`));
   lines.push("", "## Stability evidence", "", ...(data.stability.observations.length ? data.stability.observations.map(x => `- ${x}`) : ["- Insufficient observations for a specific finding."]));
   return lines.join("\n");
-}
-export function format_json(data: FailureAnalysisData): string { return JSON.stringify(normalize_report_data(data), null, 2); }
-export function format_plain_text(data: FailureAnalysisData): string { return format_markdown(data).replace(/^#+\s*/gm, "").replace(/[*`]/g, ""); }
-export function generate_bug_report(data: FailureAnalysisData, format: "markdown" | "json" | "plain_text"): string {
-  if (format === "markdown") return format_markdown(data); if (format === "json") return format_json(data); if (format === "plain_text") return format_plain_text(data); throw new Error(`Unsupported report format: ${format}`);
-}
-export async function save_bug_report(failure: FailedTest, outputDirectory: string, format: "markdown" | "json" | "plain_text", mode: ReportMode = "developer", history: HistoryRecord[] = []): Promise<string> {
-  const details = collect_failure_details(failure), evidence = find_evidence(failure.result), environment = collect_environment(failure);
-  const data = build_report_data(details, evidence, environment, mode, history), contents = generate_bug_report(data, format), extension = format === "markdown" ? ".md" : format === "json" ? ".json" : ".txt";
-  const path = join(outputDirectory, make_filename(data).replace(/\.md$/, extension)); await save_file(path, contents); return path;
 }
