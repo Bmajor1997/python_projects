@@ -25,10 +25,17 @@ export type EnvironmentDetails = {
   commitSha: string | null; branch: string | null; ciRunUrl: string | null; ciProvider: string | null;
   safeEnvironment: Record<string, string>;
 };
-export type AIAnalysis = {
-  title: string; summary: string; category: FailureCategory; likelyCause: string;
-  severity: string; priority: string; relevantStep: string | null; investigationSteps: string[];
-  confidence: number; verifiedFacts: string[]; assumptions: string[]; missingInformation: string[];
+export type RelatedCodeLocation = {
+  rank: 1 | 2 | 3;
+  filePath: string;
+  lineNumber: number;
+  confidence: number;
+  suggestedFix: string;
+};
+export type FailureAnalysis = {
+  simpleExplanation: string;
+  likelyCauses: string[];
+  relatedCodeLocations: RelatedCodeLocation[];
 };
 export type StabilityAnalysis = {
   classification: StabilityClassification; observations: string[]; sampleSize: number;
@@ -37,7 +44,7 @@ export type StabilityAnalysis = {
 export type FailureAnalysisData = {
   details: FailureDetails; evidence: EvidenceFiles; environment: EnvironmentDetails;
   generatedAt: Date; automatedWarning: string; fingerprint: string; stability: StabilityAnalysis;
-  aiAnalysis: AIAnalysis | null; mode: ReportMode;
+  analysis: FailureAnalysis | null; mode: ReportMode;
 };
 export type GeneratedAnalysisArtifacts = { directory: string; data: string; markdown: string };
 export type HistoryRecord = { fingerprint: string; testTitle: string; status: string; browserName: string; isCI: boolean; timestamp: string; retryNumber: number };

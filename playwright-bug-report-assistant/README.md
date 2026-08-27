@@ -2,7 +2,7 @@
 
 This project is an automation-only Playwright failure analysis assistant. Its custom reporter reacts to failed Playwright tests and collects sanitized diagnostic data, including failure details, screenshots, traces, runtime context, environment and CI metadata, fingerprints, history, and stability analysis.
 
-The future analysis schema and likely-code-location recommendations are intentionally not implemented yet. Current artifacts are sanitized JSON, a Markdown summary, and copied evidence.
+Each failure receives a short explanation written in very simple language, up to three likely causes, and up to three trustworthy repository code locations. Each location includes its exact line number, confidence score, and a suggested fix. The assistant returns fewer locations when the captured test and stack data do not support three real locations.
 
 ## Setup
 
@@ -34,7 +34,12 @@ Analysis artifacts are written to `test-results/failure-analyses/<test-project-f
 |---|---|---|
 | `BUG_REPORT_MODE` | `developer` | `developer`, `product`, or `customer-safe` |
 | `BUG_REPORT_SAFE_ENV` | `CI,NODE_ENV` | Comma-separated environment-variable allowlist |
+| `FAILURE_ANALYSIS_ENDPOINT` | unset | Optional HTTP analysis-provider endpoint |
+| `FAILURE_ANALYSIS_API_KEY` | unset | API key used with the optional endpoint |
+| `FAILURE_ANALYSIS_MODEL` | `configured-model` | Optional provider model name |
 `failure-analysis.json` is the persisted, sanitized `FailureAnalysisData` payload. `failure-summary.md` is the concise human-readable artifact. Evidence is copied when possible and always linked; large traces remain separate files.
+
+Without an external provider, the reporter still creates a basic analysis from the Playwright error, captured browser evidence, test file, and stack trace. Provider output is accepted only when it follows the small analysis schema and uses code locations already verified against the repository.
 
 ## Security and privacy
 

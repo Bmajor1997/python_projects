@@ -2,8 +2,7 @@ import { expect, test } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { format_markdown, normalize_report_data } from "../src/bug-report-generator";
-import { make_report_folder_name } from "../src/file-utils";
-import { read_report_data, save_report_bundle } from "../src/report-bundle";
+import { make_report_folder_name, read_report_data, save_report_bundle } from "../src/report-bundle";
 import type { FailureAnalysisData } from "../src/types";
 
 function analysis(mode: FailureAnalysisData["mode"] = "developer"): FailureAnalysisData {
@@ -11,14 +10,19 @@ function analysis(mode: FailureAnalysisData["mode"] = "developer"): FailureAnaly
     details: { testTitle: "Checkout <script>alert(1)</script>", testFile: "tests/checkout.spec.ts", lineNumber: 4, columnNumber: 2, status: "failed", errorMessage: "Expected <paid> Bearer abcdefghijklmnop", stackTrace: "Error <unsafe>", startTime: new Date("2026-08-25T12:00:00Z"), durationMs: 50, retryNumber: 0, testSteps: ["Submit <payment>"], expectedBehavior: "Receipt <shown>", actualBehavior: "Error <shown>", failedStep: "Submit <payment>", tags: [] },
     evidence: { screenshotPaths: [], tracePaths: [], otherAttachments: [], currentUrl: "https://shop.test/?token=secret", consoleMessages: ["console <secret>"], pageErrors: ["page <secret>"], networkFailures: [{ method: "GET", url: "https://api.test/<private>", status: 500, reason: "bad <gateway>" }], accessibilitySnapshot: null, domSnippet: "<input value=secret>" },
     environment: { operatingSystem: "Windows", systemRelease: "11", projectName: "chromium", browserName: "chromium", browserVersion: null, viewport: { width: 1280, height: 720 }, locale: "en-US", timezone: "UTC", executionTime: new Date("2026-08-25T12:00:00Z"), commitSha: "deadbeef", branch: "main", ciRunUrl: "https://ci.test/run/1", ciProvider: "CI", safeEnvironment: { CI: "true" } },
-    generatedAt: new Date("2026-08-25T12:01:00Z"), automatedWarning: "Automatically generated.", fingerprint: "abcdef1234567890", stability: { classification: "insufficient history", observations: [], sampleSize: 0, failureRate: null, recentTrend: "unknown", consecutivePasses: 0, consecutiveFailures: 0 }, aiAnalysis: null, mode,
+    generatedAt: new Date("2026-08-25T12:01:00Z"), automatedWarning: "Automatically generated.", fingerprint: "abcdef1234567890", stability: { classification: "insufficient history", observations: [], sampleSize: 0, failureRate: null, recentTrend: "unknown", consecutivePasses: 0, consecutiveFailures: 0 }, analysis: null, mode,
   };
 }
 
 test("failure analysis data and summary omit human review", () => {
   const data = analysis();
+  data.analysis = { simpleExplanation: "The test looked for a button, but the button was not there.", likelyCauses: ["The button may have changed."], relatedCodeLocations: [{ rank: 1, filePath: "tests/checkout.spec.ts", lineNumber: 4, confidence: 0.8, suggestedFix: "Update the button locator." }] };
   expect(data).not.toHaveProperty("humanReview");
-  expect(format_markdown(data)).not.toContain("Human review");
+  const summary = format_markdown(data);
+  expect(summary).not.toContain("Human review");
+  expect(summary).toContain("## Simple explanation");
+  expect(summary).toContain("tests/checkout\\.spec\\.ts:4");
+  expect(summary).toContain("Update the button locator");
 });
 
 test("failure folder name is deterministic", () => {
@@ -46,4 +50,41 @@ test("customer-safe analysis omits internal diagnostics and secrets", () => {
   expect(serialized).not.toContain("deadbeef");
   expect(serialized).not.toContain("Bearer abcdefghijklmnop");
   expect(serialized).toContain("[REDACTED]");
+});
+
+test("normalization trims failure and environment values", () => {
+  const data = analysis();
+  data.details.testTitle = "  Checkout displays an error  ";
+  data.details.testFile = "  tests/checkout.spec.ts  ";
+  data.details.errorMessage = "  Expected confirmation message  ";
+  data.details.stackTrace = "  Error: confirmation message missing  ";
+  data.environment.operatingSystem = "  Windows  ";
+  data.environment.projectName = "  chromium  ";
+  const normalized = normalize_report_data(data);
+  expect(normalized.details.testTitle).toBe("Checkout displays an error");
+  expect(normalized.details.testFile).toBe("tests/checkout.spec.ts");
+  expect(normalized.details.errorMessage).toBe("Expected confirmation message");
+  expect(normalized.details.stackTrace).toBe("Error: confirmation message missing");
+  expect(normalized.environment.operatingSystem).toBe("Windows");
+  expect(normalized.environment.projectName).toBe("chromium");
+});
+
+test("normalization removes blank steps and evidence paths", () => {
+  const data = analysis();
+  data.details.testSteps = ["  Open checkout page  ", "   ", "Submit payment"];
+  data.evidence.screenshotPaths = ["  test-results/failure.png  ", ""];
+  data.evidence.tracePaths = ["  test-results/trace.zip  ", "   "];
+  data.evidence.otherAttachments = ["  test-results/network.txt  ", ""];
+  const normalized = normalize_report_data(data);
+  expect(normalized.details.testSteps).toEqual(["Open checkout page", "Submit payment"]);
+  expect(normalized.evidence.screenshotPaths).toEqual(["test-results/failure.png"]);
+  expect(normalized.evidence.tracePaths).toEqual(["test-results/trace.zip"]);
+  expect(normalized.evidence.otherAttachments).toEqual(["test-results/network.txt"]);
+});
+
+test("normalization does not modify its input", () => {
+  const data = analysis();
+  const original = structuredClone(data);
+  normalize_report_data(data);
+  expect(data).toEqual(original);
 });

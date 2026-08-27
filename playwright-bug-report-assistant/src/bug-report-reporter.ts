@@ -4,6 +4,7 @@ import { build_report_data, collect_environment, collect_failure_details, find_e
 import { append_history, read_history } from "./history";
 import type { FailedTest, ReportMode } from "./types";
 import { save_report_bundle } from "./report-bundle";
+import { create_http_ai_analyzer, run_failure_analysis } from "./ai-analysis";
 
 export default class BugReportReporter implements Reporter {
   private readonly pendingReports = new Set<Promise<void>>();
@@ -32,6 +33,9 @@ export default class BugReportReporter implements Reporter {
       const failure = { test, result } satisfies FailedTest;
       const history = await read_history(historyPath);
       const data = build_report_data(collect_failure_details(failure), find_evidence(result), collect_environment(failure), mode, history);
+      const endpoint = process.env.FAILURE_ANALYSIS_ENDPOINT, apiKey = process.env.FAILURE_ANALYSIS_API_KEY;
+      const analyzer = endpoint && apiKey ? create_http_ai_analyzer(endpoint, apiKey) : undefined;
+      data.analysis = await run_failure_analysis(data, analyzer, { model: process.env.FAILURE_ANALYSIS_MODEL, projectRoot: process.cwd() });
       const reports = await save_report_bundle(data, join(process.cwd(), "test-results", "failure-analyses"));
       await append_history(historyPath, { ...historyRecord, fingerprint: data.fingerprint });
       console.log(`Failure analysis data: ${reports.data}`);
