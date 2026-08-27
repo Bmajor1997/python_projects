@@ -52,12 +52,12 @@ export function collect_environment({ test, result }: FailedTest): EnvironmentDe
     ciRunUrl: server && repo && run ? `${server}/${repo}/actions/runs/${run}` : null, ciProvider: process.env.GITHUB_ACTIONS ? "GitHub Actions" : process.env.CI ? "CI" : null,
     safeEnvironment: safe_environment(process.env, allowlist) };
 }
-export function build_report_data(details: FailureDetails, evidence: EvidenceFiles, environment: EnvironmentDetails, mode: ReportMode = "developer", history: HistoryRecord[] = []): FailureAnalysisData {
+export function build_failure_analysis_data(details: FailureDetails, evidence: EvidenceFiles, environment: EnvironmentDetails, mode: ReportMode = "developer", history: HistoryRecord[] = []): FailureAnalysisData {
   const fingerprint = create_fingerprint(details, environment.browserName, evidence.currentUrl);
   return { details, evidence, environment, generatedAt: new Date(), automatedWarning: "Automatically generated failure analysis. AI suggestions and inferred fields require verification.",
     fingerprint, stability: analyze_stability(history.filter(x => x.testTitle === details.testTitle)), analysis: null, mode };
 }
-export function normalize_report_data(data: FailureAnalysisData): FailureAnalysisData {
+export function normalize_failure_analysis_data(data: FailureAnalysisData): FailureAnalysisData {
   const trim = (value: unknown): unknown => {
     if (typeof value === "string") { const text = value.trim(); return text || null; }
     if (value instanceof Date) return new Date(value.getTime());
@@ -82,8 +82,8 @@ export function normalize_report_data(data: FailureAnalysisData): FailureAnalysi
 }
 const show = (value: unknown) => value === null || value === undefined || value === "" ? "Unavailable" : String(value);
 const links = (paths: string[]) => paths.length ? paths.map(p => `- [${escape_markdown(relative(process.cwd(), p) || p)}](${p.replace(/\\/g, "/")})`).join("\n") : "- None captured";
-export function format_markdown(input: FailureAnalysisData): string {
-  const data = normalize_report_data(input), { details: d, evidence: e, environment: n } = data;
+export function format_failure_summary(input: FailureAnalysisData): string {
+  const data = normalize_failure_analysis_data(input), { details: d, evidence: e, environment: n } = data;
   const lines = [`# ${escape_markdown(friendly_report_title(d.errorMessage, d.testTitle, d.expectedBehavior, d.actualBehavior))}`, "", `> ${data.automatedWarning}`, "", "## Summary", "",
     `- **Status:** ${d.status}`, `- **Category:** ${categorize_failure(d.errorMessage)}`, `- **Fingerprint:** \`${data.fingerprint}\``, `- **Stability:** ${data.stability.classification} (${data.stability.sampleSize} samples)`,
     `- **What went wrong:** ${escape_markdown(d.errorMessage)}`, "", "## Reproduction", "", `- **Test:** ${escape_markdown(friendly_test_name(d.testTitle))}`, `- **Failed step:** ${show(d.failedStep)}`,

@@ -9,7 +9,9 @@ export type AIAnalyzer = (sanitizedInput: unknown, options: { model: string; tim
 
 function simple_explanation(data: FailureAnalysisData): string {
   const { details } = data;
-  if (details.expectedBehavior && details.actualBehavior) return `The test expected ${details.expectedBehavior}, but it got ${details.actualBehavior} instead.`;
+  const plainValue = (value: string | null): string | null => value && value.length <= 80 && !/[<>{}\[\]\\/]/.test(value) ? value.replace(/[`"']/g, "").trim() : null;
+  const expected = plainValue(details.expectedBehavior), actual = plainValue(details.actualBehavior);
+  if (expected && actual) return `The test wanted to see ${expected}, but it saw ${actual} instead.`;
   const name = friendly_test_name(details.testTitle);
   const category = categorize_failure(details.errorMessage);
   if (category === "timeout") return `The ${name} test waited for something to happen, but it took too long.`;
@@ -22,23 +24,24 @@ function simple_explanation(data: FailureAnalysisData): string {
 function likely_causes(data: FailureAnalysisData): string[] {
   const causes: string[] = [];
   const category = categorize_failure(data.details.errorMessage);
-  const categoryCause: Record<typeof category, string> = {
-    selector: "The page element may have moved, changed its name, or not appeared.",
-    timeout: "The page or action may be taking longer than the test allows.",
-    authentication: "The user may not have been signed in correctly.",
-    api: "An API used by the page may have returned the wrong result.",
-    network: "A network request may have failed or lost its connection.",
-    visual: "The page may look different from the saved visual baseline.",
-    assertion: "The application returned a different value than the test expected.",
-    environment: "The browser, machine, or CI environment may be configured differently.",
-    unknown: "The application may not have reached the state that the test expected.",
+  const categoryCauses: Record<typeof category, [string, string, string]> = {
+    selector: ["The thing the test looked for may have changed its name.", "The page may not have finished showing the missing item.", "The test may be looking on the wrong page."],
+    timeout: ["The page or action may be taking too long.", "The test may be waiting for something that never appears.", "A slow service may be stopping the page from finishing."],
+    authentication: ["The user may not have been signed in.", "The sign-in information may be missing or expired.", "The test may have been sent back to the sign-in page."],
+    api: ["A service used by the page may have returned the wrong answer.", "The page may have sent the wrong information to the service.", "The service may have been unavailable when the test ran."],
+    network: ["The page may have lost its connection.", "A service used by the page may not have answered.", "The request may have gone to the wrong place."],
+    visual: ["The page may look different from the saved picture.", "The browser size or display settings may be different.", "The page may not have finished drawing before the picture was taken."],
+    assertion: ["The application may have returned the wrong value.", "The test may still expect an old value.", "The page may not have finished updating before it was checked."],
+    environment: ["The test machine may be set up differently.", "A needed setting or file may be missing.", "The browser version may behave differently."],
+    unknown: ["The page may not have reached the step the test expected.", "The test data may be missing or different.", "An earlier action may not have finished correctly."],
   };
-  causes.push(categoryCause[category]);
+  causes.push(categoryCauses[category][0]);
   const network = data.evidence.networkFailures[0];
-  if (network) causes.push(`The ${network.method} request to ${network.url} failed${network.status ? ` with status ${network.status}` : ""}.`);
-  if (data.evidence.pageErrors[0]) causes.push(`The page reported an error: ${data.evidence.pageErrors[0]}`);
-  else if (data.evidence.consoleMessages[0]) causes.push(`The browser reported: ${data.evidence.consoleMessages[0]}`);
+  if (network) causes.push("A request needed by the page did not work.");
+  if (data.evidence.pageErrors[0]) causes.push("The page itself reported that something broke.");
+  else if (data.evidence.consoleMessages[0]) causes.push("The browser reported a problem while the page was running.");
   else if (data.stability.classification === "likely flaky") causes.push("The test history changes between passing and failing, so timing or unstable data may be involved.");
+  causes.push(...categoryCauses[category].slice(1));
   return [...new Set(causes)].slice(0, 3);
 }
 
@@ -46,24 +49,40 @@ function valid_repository_location(path: string, lineNumber: number, projectRoot
   const absolute = resolve(projectRoot, path);
   const repositoryPath = relative(projectRoot, absolute);
   if (repositoryPath.startsWith("..") || isAbsolute(repositoryPath) || !existsSync(absolute)) return null;
+  const segments = repositoryPath.replace(/\\/g, "/").split("/");
+  if (segments.some(segment => ["node_modules", "test-results", "playwright-report", "blob-report", "dist", "release", ".git"].includes(segment))) return null;
   const lineCount = readFileSync(absolute, "utf8").split(/\r?\n/).length;
   if (!Number.isInteger(lineNumber) || lineNumber < 1 || lineNumber > lineCount) return null;
   return { filePath: repositoryPath.replace(/\\/g, "/"), lineNumber };
 }
 
 function related_code_locations(data: FailureAnalysisData, projectRoot: string): RelatedCodeLocation[] {
-  const candidates: Array<{ path: string; line: number }> = [{ path: data.details.testFile, line: data.details.lineNumber }];
-  for (const match of data.details.stackTrace?.matchAll(/(?:\(|\bat\s+)([^()\r\n]+?\.(?:ts|tsx|js|jsx)):(\d+):\d+/g) ?? []) candidates.push({ path: match[1].trim(), line: Number(match[2]) });
+  const candidates: Array<{ path: string; line: number; source: "test" | "stack" }> = [{ path: data.details.testFile, line: data.details.lineNumber, source: "test" }];
+  for (const match of data.details.stackTrace?.matchAll(/(?:\(|\bat\s+)([^()\r\n]+?\.(?:ts|tsx|js|jsx)):(\d+):\d+/g) ?? []) candidates.push({ path: match[1].trim(), line: Number(match[2]), source: "stack" });
+  const category = categorize_failure(data.details.errorMessage);
+  const suggestedFix = (filePath: string): string => {
+    const isTest = /(^|\/)(tests?|specs?)(\/|$)|\.spec\.[jt]sx?$/.test(filePath);
+    if (category === "selector") return isTest ? "Update the locator so the test looks for the element that is really on the page." : "Make sure this code shows the expected page element before the test looks for it.";
+    if (category === "timeout") return "Check what this line is waiting for and make sure the action can finish before the time limit.";
+    if (category === "network" || category === "api") return "Check how this line handles the failed request and make sure the page can recover or show the correct result.";
+    if (category === "assertion") return isTest ? "Check that this expected value still matches the correct application behavior." : "Check why this line produces a value different from what the test expects.";
+    return isTest ? "Check this test step against the current application behavior and correct the expectation or setup." : "Check the application behavior at this line and correct the state that caused the failure.";
+  };
+  const resolved = candidates.map(candidate => ({ candidate, location: valid_repository_location(candidate.path, candidate.line, projectRoot) })).filter((item): item is { candidate: typeof candidates[number]; location: { filePath: string; lineNumber: number } } => Boolean(item.location));
+  resolved.sort((a, b) => {
+    const score = (item: typeof a) => item.candidate.source === "stack" && !/(^|\/)(tests?|specs?)(\/|$)|\.spec\.[jt]sx?$/.test(item.location.filePath) ? 3 : item.candidate.source === "stack" ? 2 : 1;
+    return score(b) - score(a);
+  });
   const unique = new Set<string>();
   const locations: RelatedCodeLocation[] = [];
-  for (const candidate of candidates) {
-    const location = valid_repository_location(candidate.path, candidate.line, projectRoot);
-    if (!location) continue;
+  for (const { candidate, location } of resolved) {
     const key = `${location.filePath}:${location.lineNumber}`;
     if (unique.has(key)) continue;
     unique.add(key);
     const rank = (locations.length + 1) as 1 | 2 | 3;
-    locations.push({ rank, ...location, confidence: rank === 1 ? 0.8 : rank === 2 ? 0.65 : 0.5, suggestedFix: "Check this line against the failure evidence and update the test or application behavior that caused the mismatch." });
+    const applicationStack = candidate.source === "stack" && !/(^|\/)(tests?|specs?)(\/|$)|\.spec\.[jt]sx?$/.test(location.filePath);
+    const confidence = applicationStack ? 0.9 : candidate.source === "stack" ? 0.8 : 0.7;
+    locations.push({ rank, ...location, confidence: Math.max(0.5, confidence - locations.length * 0.1), suggestedFix: suggestedFix(location.filePath) });
     if (locations.length === 3) break;
   }
   return locations;
@@ -77,7 +96,7 @@ function valid_analysis(value: unknown, allowedLocations: Set<string>): value is
   if (!value || typeof value !== "object") return false;
   const analysis = value as Partial<FailureAnalysis>;
   if (typeof analysis.simpleExplanation !== "string" || !analysis.simpleExplanation.trim()) return false;
-  if (!Array.isArray(analysis.likelyCauses) || analysis.likelyCauses.length > 3 || analysis.likelyCauses.some(cause => typeof cause !== "string" || !cause.trim())) return false;
+  if (!Array.isArray(analysis.likelyCauses) || analysis.likelyCauses.length !== 3 || analysis.likelyCauses.some(cause => typeof cause !== "string" || !cause.trim())) return false;
   if (!Array.isArray(analysis.relatedCodeLocations) || analysis.relatedCodeLocations.length > 3) return false;
   return analysis.relatedCodeLocations.every((location, index) => location && location.rank === index + 1 && typeof location.filePath === "string" && Number.isInteger(location.lineNumber) && allowedLocations.has(`${location.filePath}:${location.lineNumber}`) && typeof location.confidence === "number" && location.confidence >= 0 && location.confidence <= 1 && typeof location.suggestedFix === "string" && Boolean(location.suggestedFix.trim()));
 }
@@ -87,7 +106,12 @@ export function create_http_ai_analyzer(endpoint: string, apiKey: string): AIAna
     const instructions = "Explain the failure with words a five-year-old can understand. Return JSON with only simpleExplanation, likelyCauses (up to 3 strings), and relatedCodeLocations (up to 3 entries). Each location needs rank, filePath, lineNumber, confidence from 0 to 1, and suggestedFix. Use only the provided candidate code locations. Never invent a file path or line number.";
     const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: options.model, input, instructions }), signal: AbortSignal.timeout(options.timeoutMs) });
     if (!response.ok) throw new Error(`AI provider returned ${response.status}`);
-    return response.json();
+    const payload = await response.json() as unknown;
+    if (!payload || typeof payload !== "object") return payload;
+    const wrapped = payload as { analysis?: unknown; result?: unknown; output?: unknown };
+    const value = wrapped.analysis ?? wrapped.result ?? wrapped.output ?? payload;
+    if (typeof value !== "string") return value;
+    try { return JSON.parse(value); } catch { return value; }
   };
 }
 

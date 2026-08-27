@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { format_markdown, normalize_report_data } from "../src/bug-report-generator";
-import { make_report_folder_name, read_report_data, save_report_bundle } from "../src/report-bundle";
+import { format_failure_summary, normalize_failure_analysis_data } from "../src/bug-report-generator";
+import { make_failure_analysis_folder_name, read_failure_analysis_data, save_failure_analysis } from "../src/report-bundle";
 import type { FailureAnalysisData } from "../src/types";
 
 function analysis(mode: FailureAnalysisData["mode"] = "developer"): FailureAnalysisData {
@@ -18,7 +18,7 @@ test("failure analysis data and summary omit human review", () => {
   const data = analysis();
   data.analysis = { simpleExplanation: "The test looked for a button, but the button was not there.", likelyCauses: ["The button may have changed."], relatedCodeLocations: [{ rank: 1, filePath: "tests/checkout.spec.ts", lineNumber: 4, confidence: 0.8, suggestedFix: "Update the button locator." }] };
   expect(data).not.toHaveProperty("humanReview");
-  const summary = format_markdown(data);
+  const summary = format_failure_summary(data);
   expect(summary).not.toContain("Human review");
   expect(summary).toContain("## Simple explanation");
   expect(summary).toContain("tests/checkout\\.spec\\.ts:4");
@@ -26,8 +26,8 @@ test("failure analysis data and summary omit human review", () => {
 });
 
 test("failure folder name is deterministic", () => {
-  expect(make_report_folder_name(analysis())).toBe(make_report_folder_name(analysis()));
-  expect(make_report_folder_name(analysis())).toBe("checkout-script-alert-1-script-chromium-abcdef123456-attempt-1");
+  expect(make_failure_analysis_folder_name(analysis())).toBe(make_failure_analysis_folder_name(analysis()));
+  expect(make_failure_analysis_folder_name(analysis())).toBe("checkout-script-alert-1-script-chromium-abcdef123456-attempt-1");
 });
 
 test("saves sanitized JSON, Markdown summary, and copied evidence", async ({}, testInfo) => {
@@ -35,16 +35,16 @@ test("saves sanitized JSON, Markdown summary, and copied evidence", async ({}, t
   const screenshot = testInfo.outputPath("failure.png");
   await writeFile(screenshot, "image");
   data.evidence.screenshotPaths = [screenshot];
-  const output = await save_report_bundle(data, testInfo.outputPath("analyses"));
+  const output = await save_failure_analysis(data, testInfo.outputPath("analyses"));
   expect(await readFile(output.markdown, "utf8")).toContain("## Summary");
   expect(await readFile(join(output.directory, "evidence", "failure.png"), "utf8")).toBe("image");
-  const persisted = await read_report_data(output.data);
+  const persisted = await read_failure_analysis_data(output.data);
   expect(persisted.details.errorMessage).toContain("[REDACTED]");
   expect(persisted.evidence.screenshotPaths).toEqual(["evidence/failure.png"]);
 });
 
 test("customer-safe analysis omits internal diagnostics and secrets", () => {
-  const data = normalize_report_data(analysis("customer-safe"));
+  const data = normalize_failure_analysis_data(analysis("customer-safe"));
   const serialized = JSON.stringify(data);
   expect(serialized).not.toContain("console <secret>");
   expect(serialized).not.toContain("deadbeef");
@@ -60,7 +60,7 @@ test("normalization trims failure and environment values", () => {
   data.details.stackTrace = "  Error: confirmation message missing  ";
   data.environment.operatingSystem = "  Windows  ";
   data.environment.projectName = "  chromium  ";
-  const normalized = normalize_report_data(data);
+  const normalized = normalize_failure_analysis_data(data);
   expect(normalized.details.testTitle).toBe("Checkout displays an error");
   expect(normalized.details.testFile).toBe("tests/checkout.spec.ts");
   expect(normalized.details.errorMessage).toBe("Expected confirmation message");
@@ -75,7 +75,7 @@ test("normalization removes blank steps and evidence paths", () => {
   data.evidence.screenshotPaths = ["  test-results/failure.png  ", ""];
   data.evidence.tracePaths = ["  test-results/trace.zip  ", "   "];
   data.evidence.otherAttachments = ["  test-results/network.txt  ", ""];
-  const normalized = normalize_report_data(data);
+  const normalized = normalize_failure_analysis_data(data);
   expect(normalized.details.testSteps).toEqual(["Open checkout page", "Submit payment"]);
   expect(normalized.evidence.screenshotPaths).toEqual(["test-results/failure.png"]);
   expect(normalized.evidence.tracePaths).toEqual(["test-results/trace.zip"]);
@@ -85,6 +85,6 @@ test("normalization removes blank steps and evidence paths", () => {
 test("normalization does not modify its input", () => {
   const data = analysis();
   const original = structuredClone(data);
-  normalize_report_data(data);
+  normalize_failure_analysis_data(data);
   expect(data).toEqual(original);
 });

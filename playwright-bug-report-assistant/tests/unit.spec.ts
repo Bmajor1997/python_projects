@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { sanitize, sanitize_string, safe_environment } from "../src/sanitizer";
 import { normalize_failure_text } from "../src/fingerprint";
 import { analyze_stability } from "../src/stability";
@@ -33,11 +35,26 @@ test("does not overclaim with too little history", () => {
 });
 test("failure analysis is simple and falls back when a provider fails", async ({}, testInfo) => {
   const testFile = testInfo.outputPath("checkout.spec.ts");
-  await import("node:fs/promises").then(({ writeFile }) => writeFile(testFile, "test('checkout', () => {});"));
+  await writeFile(testFile, "test('checkout', () => {});");
   const data = { details: { testTitle: "checkout", testFile, lineNumber: 1, errorMessage: "Timeout waiting for the Pay button", expectedBehavior: null, actualBehavior: null, stackTrace: null }, evidence: { networkFailures: [], pageErrors: [], consoleMessages: [] }, environment: {}, stability: { classification: "insufficient history" } } as never;
   const basic = create_basic_failure_analysis(data, testInfo.outputDir);
   expect(basic.simpleExplanation).toContain("took too long");
-  expect(basic.likelyCauses).toHaveLength(1);
-  expect(basic.relatedCodeLocations).toEqual([{ rank: 1, filePath: "checkout.spec.ts", lineNumber: 1, confidence: 0.8, suggestedFix: expect.any(String) }]);
+  expect(basic.likelyCauses).toHaveLength(3);
+  expect(basic.relatedCodeLocations).toEqual([{ rank: 1, filePath: "checkout.spec.ts", lineNumber: 1, confidence: 0.7, suggestedFix: expect.stringContaining("time limit") }]);
   expect(await run_failure_analysis(data, async () => { throw new Error("offline"); }, { projectRoot: testInfo.outputDir })).toEqual(basic);
+});
+
+test("failure analysis prefers application stack locations and ignores generated dependencies", async ({}, testInfo) => {
+  const sourceDirectory = join(testInfo.outputDir, "src"), dependencyDirectory = join(testInfo.outputDir, "node_modules", "library");
+  await mkdir(sourceDirectory, { recursive: true });
+  await mkdir(dependencyDirectory, { recursive: true });
+  await writeFile(join(sourceDirectory, "checkout.ts"), "one\ntwo\nthree");
+  await writeFile(join(dependencyDirectory, "index.js"), "one\ntwo\nthree");
+  const testFile = join(testInfo.outputDir, "checkout.spec.ts");
+  await writeFile(testFile, "one\ntwo\nthree");
+  const data = { details: { testTitle: "checkout", testFile, lineNumber: 2, errorMessage: "Expected: paid\nReceived: declined", expectedBehavior: "paid", actualBehavior: "declined", stackTrace: `at checkout (${join(sourceDirectory, "checkout.ts")}:2:1)\nat library (${join(dependencyDirectory, "index.js")}:2:1)` }, evidence: { networkFailures: [], pageErrors: [], consoleMessages: [] }, environment: {}, stability: { classification: "insufficient history" } } as never;
+  const result = create_basic_failure_analysis(data, testInfo.outputDir);
+  expect(result.simpleExplanation).toBe("The test wanted to see paid, but it saw declined instead.");
+  expect(result.relatedCodeLocations[0]).toMatchObject({ rank: 1, filePath: "src/checkout.ts", lineNumber: 2, confidence: 0.9 });
+  expect(result.relatedCodeLocations.some(location => location.filePath.includes("node_modules"))).toBe(false);
 });

@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
-import { format_markdown, normalize_report_data } from "./bug-report-generator";
+import { format_failure_summary, normalize_failure_analysis_data } from "./bug-report-generator";
 import type { FailureAnalysisData, GeneratedAnalysisArtifacts } from "./types";
 
 function make_filename(data: FailureAnalysisData): string {
@@ -8,7 +8,7 @@ function make_filename(data: FailureAnalysisData): string {
   return `${identity}-${data.fingerprint.slice(0, 12)}`;
 }
 
-export function make_report_folder_name(data: FailureAnalysisData): string {
+export function make_failure_analysis_folder_name(data: FailureAnalysisData): string {
   return `${make_filename(data)}-attempt-${data.details.retryNumber + 1}`;
 }
 
@@ -37,21 +37,21 @@ async function localize_evidence(data: FailureAnalysisData, directory: string): 
   return localized;
 }
 
-export function serialize_report_data(input: FailureAnalysisData): string {
-  return JSON.stringify(normalize_report_data(input), null, 2);
+export function serialize_failure_analysis_data(input: FailureAnalysisData): string {
+  return JSON.stringify(normalize_failure_analysis_data(input), null, 2);
 }
 
-export async function read_report_data(path: string): Promise<FailureAnalysisData> {
+export async function read_failure_analysis_data(path: string): Promise<FailureAnalysisData> {
   const parsed = JSON.parse(await readFile(path, "utf8")) as FailureAnalysisData;
   parsed.details.startTime = new Date(parsed.details.startTime);
   parsed.environment.executionTime = new Date(parsed.environment.executionTime);
   parsed.generatedAt = new Date(parsed.generatedAt);
-  return normalize_report_data(parsed);
+  return normalize_failure_analysis_data(parsed);
 }
 
-export async function save_report_bundle(input: FailureAnalysisData, outputRoot: string): Promise<GeneratedAnalysisArtifacts> {
-  const sanitized = normalize_report_data(input);
-  const directory = join(outputRoot, make_report_folder_name(sanitized));
+export async function save_failure_analysis(input: FailureAnalysisData, outputRoot: string): Promise<GeneratedAnalysisArtifacts> {
+  const sanitized = normalize_failure_analysis_data(input);
+  const directory = join(outputRoot, make_failure_analysis_folder_name(sanitized));
   await mkdir(directory, { recursive: true });
   const data = await localize_evidence(sanitized, directory);
   const artifacts: GeneratedAnalysisArtifacts = {
@@ -60,8 +60,8 @@ export async function save_report_bundle(input: FailureAnalysisData, outputRoot:
     markdown: join(directory, "failure-summary.md"),
   };
   await Promise.all([
-    writeFile(artifacts.data, serialize_report_data(data), "utf8"),
-    writeFile(artifacts.markdown, format_markdown(data), "utf8"),
+    writeFile(artifacts.data, serialize_failure_analysis_data(data), "utf8"),
+    writeFile(artifacts.markdown, format_failure_summary(data), "utf8"),
   ]);
   return artifacts;
 }
