@@ -6,6 +6,8 @@ import { normalize_failure_text } from "../src/fingerprint";
 import { analyze_stability } from "../src/stability";
 import type { HistoryRecord } from "../src/types";
 import { create_basic_failure_analysis, run_failure_analysis } from "../src/ai-analysis";
+import { append_history, read_history } from "../src/history";
+import { OpenAIAnalysisProvider } from "../src/providers";
 import { expectation_values, friendly_failure_message, friendly_report_title } from "../src/text-utils";
 
 test("recursively redacts secrets and sensitive URL values", () => {
@@ -15,6 +17,9 @@ test("recursively redacts secrets and sensitive URL values", () => {
 test("redacts token-shaped text and only exposes allowlisted environment values", () => {
   expect(sanitize_string("Bearer abcdefghijklmnop")).toBe("[REDACTED]");
   expect(safe_environment({ SAFE: "yes", SECRET: "no" }, ["SAFE"])).toEqual({ SAFE: "yes" });
+});
+test("redacts email addresses from provider-bound text", () => {
+  expect(sanitize_string("Customer jane@example.com failed checkout")).toBe("Customer [REDACTED] failed checkout");
 });
 test("keeps ordinary error text readable instead of URL-encoding it", () => {
   const error = 'Error: failed\nExpected: "Payment approved"\nReceived: "Payment declined"';
@@ -57,4 +62,17 @@ test("failure analysis prefers application stack locations and ignores generated
   expect(result.simpleExplanation).toBe("The test wanted to see paid, but it saw declined instead.");
   expect(result.relatedCodeLocations[0]).toMatchObject({ rank: 1, filePath: "src/checkout.ts", lineNumber: 2, confidence: 0.9 });
   expect(result.relatedCodeLocations.some(location => location.filePath.includes("node_modules"))).toBe(false);
+});
+test("serializes concurrent history writes", async ({}, testInfo) => {
+  const path = testInfo.outputPath("history.json");
+  await Promise.all(Array.from({ length: 20 }, (_, index) => append_history(path, { fingerprint: `f${index}`, testTitle: "test", status: "failed", browserName: "chromium", isCI: false, timestamp: new Date(index * 1000).toISOString(), retryNumber: 0 })));
+  expect(await read_history(path)).toHaveLength(20);
+});
+test("OpenAI provider requests structured output without a live API call", async () => {
+  let request: unknown;
+  const client = { responses: { create: async (value: unknown) => { request = value; return { output_text: JSON.stringify({ simpleExplanation: "The checkout timed out.", likelyCauses: ["The button never appeared."], relatedCodeLocations: [] }) }; } } };
+  const result = await new OpenAIAnalysisProvider(client as never).analyze({ candidateCodeLocations: [] }, { model: "test-model", timeoutMs: 1000 });
+  expect(result.provider).toBe("openai");
+  expect(result.analysis).toMatchObject({ simpleExplanation: "The checkout timed out." });
+  expect(request).toMatchObject({ model: "test-model", store: false, text: { format: { type: "json_schema", strict: true } } });
 });

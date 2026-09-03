@@ -16,7 +16,7 @@ async function localize_evidence(data: FailureAnalysisData, directory: string): 
   const evidenceDirectory = join(directory, "evidence");
   await mkdir(evidenceDirectory, { recursive: true });
   const used = new Map<string, number>();
-  const copy = async (source: string): Promise<string> => {
+  const copy = async (source: string): Promise<string | null> => {
     const original = basename(source) || "attachment";
     const count = used.get(original) ?? 0;
     used.set(original, count + 1);
@@ -27,13 +27,14 @@ async function localize_evidence(data: FailureAnalysisData, directory: string): 
       await copyFile(source, destination);
       return relative(directory, destination).replace(/\\/g, "/");
     } catch {
-      return source.replace(/\\/g, "/");
+      localized.warnings = [...(localized.warnings ?? []), { code: "EVIDENCE_COPY_FAILED", message: `Evidence could not be copied: ${basename(source)}` }];
+      return null;
     }
   };
   const localized = structuredClone(data);
-  localized.evidence.screenshotPaths = await Promise.all(data.evidence.screenshotPaths.map(copy));
-  localized.evidence.tracePaths = await Promise.all(data.evidence.tracePaths.map(copy));
-  localized.evidence.otherAttachments = await Promise.all(data.evidence.otherAttachments.map(copy));
+  localized.evidence.screenshotPaths = (await Promise.all(data.evidence.screenshotPaths.map(copy))).filter((value): value is string => value !== null);
+  localized.evidence.tracePaths = (await Promise.all(data.evidence.tracePaths.map(copy))).filter((value): value is string => value !== null);
+  localized.evidence.otherAttachments = (await Promise.all(data.evidence.otherAttachments.map(copy))).filter((value): value is string => value !== null);
   return localized;
 }
 

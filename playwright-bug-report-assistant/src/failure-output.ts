@@ -25,6 +25,9 @@ export function normalize_failure_analysis_data(data: FailureAnalysisData): Fail
     clean.environment.commitSha = null;
     clean.environment.branch = null;
     clean.context = {};
+    clean.evidence.screenshotPaths = [];
+    clean.evidence.tracePaths = [];
+    clean.evidence.otherAttachments = [];
   }
   return clean;
 }
@@ -35,6 +38,8 @@ const links = (paths: string[]) => paths.length ? paths.map(p => `- [${escape_ma
 export function format_failure_summary(input: FailureAnalysisData): string {
   const data = normalize_failure_analysis_data(input), { details: d, evidence: e, environment: n } = data;
   const lines = [`# ${escape_markdown(friendly_report_title(d.errorMessage, d.testTitle, d.expectedBehavior, d.actualBehavior))}`, "", `> ${data.automatedWarning}`, "", "## Summary", "",
+    `- **Schema/tool version:** ${data.schemaVersion ?? "legacy"} / ${data.toolVersion ?? "unknown"}`,
+    `- **Analysis provider:** ${data.analysisMetadata?.provider ?? "deterministic"}${data.analysisMetadata?.model ? ` (${data.analysisMetadata.model})` : ""}${data.analysisMetadata?.fallbackUsed ? " — deterministic fallback used" : ""}`,
     `- **Status:** ${d.status}`, `- **Category:** ${categorize_failure(d.errorMessage)}`, `- **Fingerprint:** \`${data.fingerprint}\``, `- **Stability:** ${data.stability.classification} (${data.stability.sampleSize} samples)`,
     `- **What went wrong:** ${escape_markdown(d.errorMessage)}`, "", "## Details", "", `- **Task:** ${escape_markdown(friendly_test_name(d.testTitle))}`, `- **Failed step:** ${show(d.failedStep)}`,
     `- **Expected:** ${show(d.expectedBehavior)}`, `- **Actual:** ${show(d.actualBehavior)}`, `- **URL:** ${show(e.currentUrl)}`, `- **Retry:** ${d.retryNumber}`,
@@ -47,6 +52,7 @@ export function format_failure_summary(input: FailureAnalysisData): string {
     lines.push("", "## Simple explanation", "", escape_markdown(data.analysis.simpleExplanation), "", "## Most likely causes", "", ...data.analysis.likelyCauses.map((cause, index) => `${index + 1}. ${escape_markdown(cause)}`), "", "## Related code locations", "");
     lines.push(...(data.analysis.relatedCodeLocations.length ? data.analysis.relatedCodeLocations.map(location => `${location.rank}. **${escape_markdown(location.filePath)}:${location.lineNumber}** — ${Math.round(location.confidence * 100)}% confidence\n   - Suggested fix: ${escape_markdown(location.suggestedFix)}`) : ["No trustworthy code location was found."]));
   }
+  if (data.warnings?.length) lines.push("", "## Warnings", "", ...data.warnings.map(warning => `- **${escape_markdown(warning.code)}:** ${escape_markdown(warning.message)}`));
   lines.push("", "## Stability evidence", "", ...(data.stability.observations.length ? data.stability.observations.map(x => `- ${x}`) : ["- Insufficient observations for a specific finding."]));
   return lines.join("\n");
 }

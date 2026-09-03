@@ -42,6 +42,9 @@ export type FailureAnalysisData = {
   details: FailureDetails; evidence: EvidenceFiles; environment: EnvironmentDetails;
   generatedAt: Date; automatedWarning: string; fingerprint: string; stability: StabilityAnalysis;
   analysis: FailureAnalysis | null; mode: ReportMode; context?: Record<string, unknown>;
+  schemaVersion?: "1.0"; toolVersion?: string;
+  analysisMetadata?: { provider: string; model: string | null; durationMs: number; fallbackUsed: boolean };
+  warnings?: Array<{ code: string; message: string }>;
 };
 export type FailureInput = {
   name: string;
