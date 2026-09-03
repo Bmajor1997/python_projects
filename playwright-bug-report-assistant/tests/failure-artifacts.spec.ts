@@ -50,6 +50,8 @@ test("customer-safe analysis omits internal diagnostics and secrets", () => {
   expect(serialized).not.toContain("deadbeef");
   expect(serialized).not.toContain("Bearer abcdefghijklmnop");
   expect(serialized).toContain("[REDACTED]");
+  expect(data.evidence.screenshotPaths).toEqual([]);
+  expect(data.evidence.tracePaths).toEqual([]);
 });
 
 test("normalization trims failure and environment values", () => {

@@ -56,5 +56,6 @@ export function collect_environment({ test, result }: FailedTest): EnvironmentDe
 export function build_failure_analysis_data(details: FailureDetails, evidence: EvidenceFiles, environment: EnvironmentDetails, mode: ReportMode = "developer", history: HistoryRecord[] = []): FailureAnalysisData {
   const fingerprint = create_fingerprint(details, environment.browserName ?? environment.runtimeName, evidence.currentUrl);
   return { details, evidence, environment, generatedAt: new Date(), automatedWarning: "Automatically generated failure analysis. AI suggestions and inferred fields require verification.",
-    fingerprint, stability: analyze_stability(history.filter(x => x.testTitle === details.testTitle)), analysis: null, mode };
+    fingerprint, stability: analyze_stability(history.filter(x => x.testTitle === details.testTitle && (!x.fingerprint || x.fingerprint === fingerprint))), analysis: null, mode,
+    schemaVersion: "1.0", toolVersion: "1.0.0", warnings: [] };
 }

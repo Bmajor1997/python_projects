@@ -5,7 +5,7 @@ import { sanitize } from "./sanitizer";
 import { friendly_test_name } from "./text-utils";
 import type { FailureAnalysis, FailureAnalysisData, RelatedCodeLocation } from "./types";
 
-export type AIAnalyzer = (sanitizedInput: unknown, options: { model: string; timeoutMs: number }) => Promise<unknown>;
+export type AIAnalyzer = ((sanitizedInput: unknown, options: { model: string; timeoutMs: number }) => Promise<unknown>) & { providerName?: string };
 
 function simple_explanation(data: FailureAnalysisData): string {
   const { details } = data;
@@ -107,7 +107,7 @@ function valid_analysis(value: unknown, allowedLocations: Set<string>): value is
 }
 
 export function create_http_ai_analyzer(endpoint: string, apiKey: string): AIAnalyzer {
-  return async (input, options) => {
+  const analyzer: AIAnalyzer = async (input, options) => {
     const instructions = "Explain the failure with words a five-year-old can understand. Return JSON with only simpleExplanation, likelyCauses (up to 3 strings), and relatedCodeLocations (up to 3 entries). Each location needs rank, filePath, lineNumber, confidence from 0 to 1, and suggestedFix. Use only the provided candidate code locations. Never invent a file path or line number.";
     const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: options.model, input, instructions }), signal: AbortSignal.timeout(options.timeoutMs) });
     if (!response.ok) throw new Error(`AI provider returned ${response.status}`);
@@ -118,18 +118,26 @@ export function create_http_ai_analyzer(endpoint: string, apiKey: string): AIAna
     if (typeof value !== "string") return value;
     try { return JSON.parse(value); } catch { return value; }
   };
+  analyzer.providerName = "http";
+  return analyzer;
 }
 
 export async function run_failure_analysis(data: FailureAnalysisData, analyzer?: AIAnalyzer, options: { model?: string; timeoutMs?: number; projectRoot?: string } = {}): Promise<FailureAnalysis> {
   const fallback = create_basic_failure_analysis(data, options.projectRoot);
-  if (!analyzer) return fallback;
+  const started = Date.now(), model = options.model ?? "configured-model";
+  if (!analyzer) { data.analysisMetadata = { provider: "deterministic", model: null, durationMs: Date.now() - started, fallbackUsed: false }; return fallback; }
   const input = sanitize({ details: data.details, evidence: data.evidence, environment: data.environment, stability: data.stability, context: data.context ?? {}, candidateCodeLocations: fallback.relatedCodeLocations });
   const timeoutMs = options.timeoutMs ?? 15_000;
   const allowedLocations = new Set(fallback.relatedCodeLocations.map(location => `${location.filePath}:${location.lineNumber}`));
   try {
-    const result = await Promise.race([analyzer(input, { model: options.model ?? "configured-model", timeoutMs }), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Failure analysis timed out")), timeoutMs))]);
-    return valid_analysis(result, allowedLocations) ? result : fallback;
+    const result = await Promise.race([analyzer(input, { model, timeoutMs }), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Failure analysis timed out")), timeoutMs))]);
+    const valid = valid_analysis(result, allowedLocations);
+    data.analysisMetadata = { provider: analyzer.providerName ?? "custom", model, durationMs: Date.now() - started, fallbackUsed: !valid };
+    if (!valid) data.warnings = [...(data.warnings ?? []), { code: "PROVIDER_OUTPUT_REJECTED", message: "Provider output failed validation; deterministic analysis was used." }];
+    return valid ? result : fallback;
   } catch {
+    data.analysisMetadata = { provider: analyzer.providerName ?? "custom", model, durationMs: Date.now() - started, fallbackUsed: true };
+    data.warnings = [...(data.warnings ?? []), { code: "PROVIDER_FAILED", message: "The configured provider failed; deterministic analysis was used." }];
     return fallback;
   }
 }

@@ -32,7 +32,8 @@ export default class BugReportReporter implements Reporter {
       const failure = { test, result };
       const history = await read_history(historyPath);
       const data = build_failure_analysis_data(collect_failure_details(failure), find_evidence(result), collect_environment(failure), mode, history);
-      const { data: analyzed, artifacts: reports } = await analyze_failure_data(data, process.cwd(), { analyzer: analyzer_from_environment(), model: process.env.FAILURE_ANALYSIS_MODEL });
+      const timeoutMs = process.env.FAILURE_ANALYSIS_TIMEOUT_MS ? Number(process.env.FAILURE_ANALYSIS_TIMEOUT_MS) : undefined;
+      const { data: analyzed, artifacts: reports } = await analyze_failure_data(data, process.cwd(), { analyzer: analyzer_from_environment(), model: process.env.FAILURE_ANALYSIS_MODEL, timeoutMs });
       await append_history(historyPath, { ...historyRecord, fingerprint: analyzed.fingerprint });
       console.log(`Failure analysis data: ${reports.data}`);
       console.log(`Failure summary: ${reports.markdown}`);

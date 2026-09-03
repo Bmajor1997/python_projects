@@ -18,6 +18,8 @@ export function normalize_failure_text(value: string): string {
 }
 export function create_fingerprint(details: FailureDetails, browserName: string, url?: string | null): string {
   const firstFrame = details.stackTrace?.split("\n").find(line => line.includes("at ")) ?? "";
-  const input = [details.testTitle, categorize_failure(details.errorMessage), normalize_failure_text(details.errorMessage), normalize_failure_text(firstFrame), url ? new URL(url).pathname : "", browserName].join("|");
+  let pathname = "";
+  if (url) try { pathname = new URL(url).pathname; } catch { pathname = ""; }
+  const input = [details.testTitle, categorize_failure(details.errorMessage), normalize_failure_text(details.errorMessage), normalize_failure_text(firstFrame), pathname, browserName].join("|");
   return createHash("sha256").update(input).digest("hex");
 }

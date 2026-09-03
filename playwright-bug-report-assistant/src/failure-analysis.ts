@@ -6,6 +6,7 @@ import { save_failure_analysis } from "./report-bundle";
 import { sanitize } from "./sanitizer";
 import { analyze_stability } from "./stability";
 import type { FailureAnalysisData, FailureInput, GeneratedAnalysisArtifacts, ReportMode } from "./types";
+import { OpenAIAnalysisProvider } from "./providers";
 
 export type AnalyzeFailureOptions = {
   analyzer?: AIAnalyzer;
@@ -40,7 +41,7 @@ export function create_failure_analysis_data(input: FailureInput, mode: ReportMo
     details: cleanDetails, evidence: cleanEvidence, environment: cleanEnvironment, generatedAt: new Date(),
     automatedWarning: "Automatically generated failure analysis. Suggested causes and fixes require verification.",
     fingerprint: create_fingerprint(cleanDetails, cleanEnvironment.runtimeName), stability: analyze_stability([]), analysis: null, mode,
-    context: sanitize(input.context ?? {}),
+    context: sanitize(input.context ?? {}), schemaVersion: "1.0", toolVersion: "1.0.0", warnings: [],
   };
 }
 
@@ -56,5 +57,18 @@ export async function analyze_failure(input: FailureInput, options: AnalyzeFailu
 }
 
 export function analyzer_from_environment(env: NodeJS.ProcessEnv = process.env): AIAnalyzer | undefined {
-  return env.FAILURE_ANALYSIS_ENDPOINT && env.FAILURE_ANALYSIS_API_KEY ? create_http_ai_analyzer(env.FAILURE_ANALYSIS_ENDPOINT, env.FAILURE_ANALYSIS_API_KEY) : undefined;
+  const provider = env.FAILURE_ANALYSIS_PROVIDER?.toLowerCase();
+  if (!provider || provider === "deterministic") return undefined;
+  if (provider === "openai") {
+    if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is required when FAILURE_ANALYSIS_PROVIDER=openai.");
+    const implementation = new OpenAIAnalysisProvider();
+    const analyzer: AIAnalyzer = async (input, options) => (await implementation.analyze(input, options)).analysis;
+    analyzer.providerName = "openai";
+    return analyzer;
+  }
+  if (provider === "http") {
+    if (!env.FAILURE_ANALYSIS_ENDPOINT || !env.FAILURE_ANALYSIS_API_KEY) throw new Error("FAILURE_ANALYSIS_ENDPOINT and FAILURE_ANALYSIS_API_KEY are required for the HTTP provider.");
+    return create_http_ai_analyzer(env.FAILURE_ANALYSIS_ENDPOINT, env.FAILURE_ANALYSIS_API_KEY);
+  }
+  throw new Error(`Unsupported FAILURE_ANALYSIS_PROVIDER: ${provider}`);
 }

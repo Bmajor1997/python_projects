@@ -2,6 +2,7 @@ const DEFAULT_KEYS = /^(authorization|proxy-authorization|cookie|set-cookie|pass
 const TOKEN_PATTERNS = [
   /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi,
   /\b(?:sk|ghp|github_pat)_[A-Za-z0-9_-]{12,}\b/g,
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
 ];
 export type SanitizerOptions = { sensitiveKeys?: RegExp; customPatterns?: RegExp[]; maxStringLength?: number; allowedEnvironmentKeys?: string[] };
 const REDACTED = "[REDACTED]";
